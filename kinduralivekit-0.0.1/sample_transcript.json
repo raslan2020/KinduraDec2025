@@ -1,0 +1,140 @@
+{
+  "conversation": {
+    "ai_1": "Hello, How are you doing today Waleed?",
+    "human_1": "Yes. I'm doing well. Thank you asking. How about you?",
+    "ai_2": "I'm here to help you! I'm glad to hear you're doing well. How has your day been so far? Any new symptoms or concerns you'd like to share? Also, just a reminder that it's almost time for your next medication, Levodopa (150mg), scheduled for 21:00. Are you managing to follow your doctor's instructions regarding your treatment?",
+    "human_2": "Okay. I will take that medicine. Time.",
+    "ai_3": "That's great to hear! Just a quick reminder, make sure to take your Levodopa (150mg) at 21:00, and keep an eye on how you're feeling afterward. Once you've taken it, please let me know. I'm waiting for your response!",
+    "human_3": "Okay. No problem. I will share the updates with you.",
+    "ai_4": "Thank you, Waleed! I'll be here waiting for your update after you take your medication. If you need anything or have any questions in the meantime, just let me know.",
+    "human_4": "Okay. Can you tell me about the instructions from the doctor",
+    "ai_5": "Of course! Here are your doctor's instructions: Avoid using stairs without support; always use handrails or assistance. Install grab bars in the bathroom and near the bed for fall prevention. Do not consume processed or high-fat fast foods; maintain a fiber-rich and diabetic-friendly diet. Avoid sudden posture changes to prevent dizziness. Engage in light stretching and physiotherapy exercises daily. Keep a daily symptom journal to help track off periods, mood changes, and medication response. Avoid activities requiring fine motor control during tremor peaks. Limit screen time before bed to help reduce sleep disturbances. Encourage routine social interaction to help prevent isolation-related depression.",
+    "human_5": "Thank you for reminding me. I will follow these instructions carefully."
+  },
+  "course_detail": {
+    "course_id": 7,
+    "course_name": "Idiopathic Parkinson's Disease",
+    "course_schedule": [
+      {
+        "id": 21,
+        "medicine_id": 12,
+        "medicine_name": "Levodopa",
+        "medicine_description": null,
+        "time": "08:00:00",
+        "dosage": "150mg",
+        "is_active": true,
+        "taken": false
+      },
+      {
+        "id": 24,
+        "medicine_id": 13,
+        "medicine_name": "Rasagiline",
+        "medicine_description": null,
+        "time": "08:00:00",
+        "dosage": "15mg",
+        "is_active": true,
+        "taken": false
+      },
+      {
+        "id": 29,
+        "medicine_id": 17,
+        "medicine_name": "Olmesartan",
+        "medicine_description": null,
+        "time": "08:00:00",
+        "dosage": "220mg",
+        "is_active": true,
+        "taken": false
+      },
+      {
+        "id": 22,
+        "medicine_id": 12,
+        "medicine_name": "Levodopa",
+        "medicine_description": null,
+        "time": "16:00:00",
+        "dosage": "150mg",
+        "is_active": true,
+        "taken": false
+      },
+      {
+        "id": 28,
+        "medicine_id": 16,
+        "medicine_name": "Melatonin",
+        "medicine_description": null,
+        "time": "20:00:00",
+        "dosage": "140mg",
+        "is_active": true,
+        "taken": false
+      },
+      {
+        "id": 23,
+        "medicine_id": 12,
+        "medicine_name": "Levodopa",
+        "medicine_description": null,
+        "time": "21:00:00",
+        "dosage": "150mg",
+        "is_active": true,
+        "taken": false
+      },
+      {
+        "id": 25,
+        "medicine_id": 13,
+        "medicine_name": "Rasagiline",
+        "medicine_description": null,
+        "time": "21:00:00",
+        "dosage": "15mg",
+        "is_active": true,
+        "taken": false
+      },
+      {
+        "id": 26,
+        "medicine_id": 14,
+        "medicine_name": "Metformin",
+        "medicine_description": null,
+        "time": "21:00:00",
+        "dosage": "40mg",
+        "is_active": true,
+        "taken": false
+      },
+      {
+        "id": 27,
+        "medicine_id": 15,
+        "medicine_name": "Amlodipine",
+        "medicine_description": null,
+        "time": "21:00:00",
+        "dosage": "40mg",
+        "is_active": true,
+        "taken": false
+      },
+      {
+        "id": 30,
+        "medicine_id": 17,
+        "medicine_name": "Olmesartan",
+        "medicine_description": null,
+        "time": "21:00:00",
+        "dosage": "220mg",
+        "is_active": true,
+        "taken": false
+      },
+      {
+        "id": 31,
+        "medicine_id": 18,
+        "medicine_name": "Bupropion XL",
+        "medicine_description": null,
+        "time": "21:00:00",
+        "dosage": "110mg",
+        "is_active": true,
+        "taken": false
+      },
+      {
+        "id": 32,
+        "medicine_id": 19,
+        "medicine_name": "Amantadine",
+        "medicine_description": null,
+        "time": "21:00:00",
+        "dosage": "20mg",
+        "is_active": true,
+        "taken": false
+      }
+    ]
+  }
+} 

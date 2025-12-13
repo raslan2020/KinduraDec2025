@@ -1,0 +1,70 @@
+
+i want to make a project in django rest framework. the project is about the medical app. So the features I want in the backend is :
+
+1. Onboarding User Model	
+	1. Login api (with email and password)
+	2. Signup api (the have to enter email, password, confirm password)
+	3. Profile api (it should be put and get api. The fileds in the api should be name, phone number, age, gender, address, terms_and_coondition)
+	
+2. There should be a form for the user that include user’s details 
+	1. Lifestyle Habits
+		-> smoking
+		-> drink alcohol
+		-> caffeine intake (cups of tea/coffee/energy drinks)
+
+	2. Phycisal Activity
+		-> How often do you exercise per week?
+		-> Type of exercise (e.g., walking, running, gym, yoga)
+		-> Average duration of physical activity
+
+	3. Dietary Habits
+		-> Typical diet type (Vegetarian / Non-vegetarian / Vegan / Other)
+		-> Any dietary restrictions (e.g., allergies, religious, medical)
+		-> Daily water intake (liters)
+
+	4. Medical History
+		-> Are you currently taking any medications? (Yes/No; If yes, list them)
+		-> Do you have any known allergies? (Yes/No; If yes, specify)
+		-> Average duration of physical activity
+		-> Any chronic conditions? (e.g., diabetes, hypertension)
+
+	5. Mental Health
+		-> Have you experienced anxiety or depression?
+		-> Are you currently seeing a therapist or psychiatrist?
+
+
+
+3. Now user has to tell about the current courses that he/she is taking. The course include:
+    1. Name of the Course
+    2. start_date
+    3. Duration
+	4. Instruction from the doctor
+
+4. Now user has to fill that are the medicines that he/she is taking.
+    1. Medicine Name
+    2. description
+
+5. After that the user define the course_medicine_schedules
+    1. Course id
+    2. Medicine id
+    3. time
+    4. Dosage
+
+6. course_day_tracking it include
+    1. id
+    2. course_id
+    3. medicine_id
+    4. date
+    5. time
+    6. taken
+	7. summary
+
+
+instruction:
+1. the. login and signup api will also return token(simple token not jwt token) and that token is used in the header of user's api like profile api and others. for authentication of api. 
+2. that token is used to identify the user that which user is requesting with apis and provide releated data through the api
+3. make a good folder structure. 
+4. Use viewsets.ViewSet(create/retrieve/update/destroy style actions) that is in the Django rest framework.
+5. the response of the api if there is not error {"status" : true , result: {response of data}} and if the error occur then {"status" : false , result: {"error" : "error msg"}}. use a seperate file where you define the response structure and use all over the project.
+
+	

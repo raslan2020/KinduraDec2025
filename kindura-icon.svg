@@ -1,0 +1,203 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <!-- Main background gradient - deep blues to soft purples -->
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1a1f4e"/>
+      <stop offset="35%" style="stop-color:#252b6a"/>
+      <stop offset="65%" style="stop-color:#2d2a5e"/>
+      <stop offset="100%" style="stop-color:#1e1a3d"/>
+    </linearGradient>
+    
+    <!-- Glassy overlay gradient -->
+    <linearGradient id="glassOverlay" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:rgba(255,255,255,0.15)"/>
+      <stop offset="50%" style="stop-color:rgba(255,255,255,0.02)"/>
+      <stop offset="100%" style="stop-color:rgba(0,0,0,0.1)"/>
+    </linearGradient>
+    
+    <!-- Central shape gradient - luminous aqua to violet -->
+    <linearGradient id="coreGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#4fd1c5"/>
+      <stop offset="30%" style="stop-color:#63b3ed"/>
+      <stop offset="60%" style="stop-color:#805ad5"/>
+      <stop offset="100%" style="stop-color:#9f7aea"/>
+    </linearGradient>
+    
+    <!-- Inner glow gradient -->
+    <radialGradient id="innerGlow" cx="50%" cy="45%" r="60%">
+      <stop offset="0%" style="stop-color:#7dd3fc;stop-opacity:0.6"/>
+      <stop offset="40%" style="stop-color:#a78bfa;stop-opacity:0.3"/>
+      <stop offset="100%" style="stop-color:#1e1a3d;stop-opacity:0"/>
+    </radialGradient>
+    
+    <!-- Holographic highlight -->
+    <linearGradient id="holoHighlight" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:rgba(127,219,255,0)"/>
+      <stop offset="30%" style="stop-color:rgba(127,219,255,0.4)"/>
+      <stop offset="50%" style="stop-color:rgba(199,167,255,0.5)"/>
+      <stop offset="70%" style="stop-color:rgba(127,219,255,0.4)"/>
+      <stop offset="100%" style="stop-color:rgba(127,219,255,0)"/>
+    </linearGradient>
+    
+    <!-- Shield/embrace shape gradient -->
+    <linearGradient id="shieldGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#67e8f9"/>
+      <stop offset="50%" style="stop-color:#a78bfa"/>
+      <stop offset="100%" style="stop-color:#c4b5fd"/>
+    </linearGradient>
+    
+    <!-- Soft shadow filter -->
+    <filter id="softShadow" x="-50%" y="-50%" width="200%" height="200%">
+      <feDropShadow dx="0" dy="8" stdDeviation="20" flood-color="#0f0a1f" flood-opacity="0.5"/>
+    </filter>
+    
+    <!-- Inner shape glow -->
+    <filter id="shapeGlow" x="-100%" y="-100%" width="300%" height="300%">
+      <feGaussianBlur stdDeviation="15" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+    
+    <!-- Soft blur for ambient glow -->
+    <filter id="ambientGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="40"/>
+    </filter>
+    
+    <!-- Micro shadow for depth -->
+    <filter id="microShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="#0a0612" flood-opacity="0.4"/>
+    </filter>
+    
+    <!-- Edge highlight filter -->
+    <filter id="edgeGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+    
+    <!-- Clip path for iOS rounded corners -->
+    <clipPath id="iosRoundedRect">
+      <rect x="0" y="0" width="1024" height="1024" rx="227" ry="227"/>
+    </clipPath>
+  </defs>
+  
+  <!-- Main icon container with iOS rounded corners -->
+  <g clip-path="url(#iosRoundedRect)">
+    
+    <!-- Base background -->
+    <rect x="0" y="0" width="1024" height="1024" fill="url(#bgGradient)"/>
+    
+    <!-- Ambient glow behind central element -->
+    <ellipse cx="512" cy="480" rx="280" ry="260" fill="url(#innerGlow)" filter="url(#ambientGlow)" opacity="0.8"/>
+    
+    <!-- Secondary ambient glow - aqua tint -->
+    <ellipse cx="480" cy="450" rx="200" ry="180" fill="#22d3ee" filter="url(#ambientGlow)" opacity="0.15"/>
+    
+    <!-- Glassy overlay layer -->
+    <rect x="0" y="0" width="1024" height="1024" fill="url(#glassOverlay)"/>
+    
+    <!-- Central protective embrace shape - outer layer -->
+    <g filter="url(#softShadow)">
+      <path d="
+        M 512 260
+        C 620 260, 720 340, 740 460
+        C 755 550, 720 640, 660 710
+        C 600 780, 512 820, 512 820
+        C 512 820, 424 780, 364 710
+        C 304 640, 269 550, 284 460
+        C 304 340, 404 260, 512 260
+        Z
+      " fill="url(#shieldGradient)" opacity="0.15" filter="url(#ambientGlow)"/>
+    </g>
+    
+    <!-- Main flowing AI presence shape -->
+    <g filter="url(#microShadow)">
+      <!-- Outer embrace/shield form -->
+      <path d="
+        M 512 300
+        C 600 300, 680 365, 695 455
+        C 707 530, 678 605, 630 665
+        C 582 725, 512 760, 512 760
+        C 512 760, 442 725, 394 665
+        C 346 605, 317 530, 329 455
+        C 344 365, 424 300, 512 300
+        Z
+      " fill="url(#coreGradient)" opacity="0.9"/>
+      
+      <!-- Inner cutout for depth - creates embrace feeling -->
+      <path d="
+        M 512 360
+        C 570 360, 620 400, 632 460
+        C 642 510, 620 560, 585 600
+        C 550 640, 512 660, 512 660
+        C 512 660, 474 640, 439 600
+        C 404 560, 382 510, 392 460
+        C 404 400, 454 360, 512 360
+        Z
+      " fill="url(#bgGradient)" opacity="0.7"/>
+    </g>
+    
+    <!-- Integrated heartbeat/waveform curve -->
+    <g filter="url(#edgeGlow)">
+      <path d="
+        M 380 510
+        Q 420 510, 440 510
+        L 460 510
+        L 475 480
+        L 495 550
+        L 512 470
+        L 530 540
+        L 548 490
+        L 565 510
+        Q 600 510, 644 510
+      " fill="none" stroke="url(#holoHighlight)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
+    </g>
+    
+    <!-- Central AI core - glowing orb -->
+    <ellipse cx="512" cy="420" rx="45" ry="42" fill="#7dd3fc" opacity="0.3" filter="url(#ambientGlow)"/>
+    <ellipse cx="512" cy="420" rx="28" ry="26" fill="url(#holoHighlight)" opacity="0.6"/>
+    <ellipse cx="512" cy="415" rx="18" ry="16" fill="#ffffff" opacity="0.5"/>
+    <ellipse cx="506" cy="412" rx="8" ry="7" fill="#ffffff" opacity="0.8"/>
+    
+    <!-- Holographic accent lines -->
+    <path d="
+      M 360 400
+      Q 400 370, 450 365
+    " fill="none" stroke="url(#holoHighlight)" stroke-width="2" stroke-linecap="round" opacity="0.5"/>
+    
+    <path d="
+      M 664 400
+      Q 624 370, 574 365
+    " fill="none" stroke="url(#holoHighlight)" stroke-width="2" stroke-linecap="round" opacity="0.5"/>
+    
+    <!-- Subtle protective aura rings -->
+    <ellipse cx="512" cy="520" rx="160" ry="180" fill="none" stroke="#67e8f9" stroke-width="1" opacity="0.15"/>
+    <ellipse cx="512" cy="520" rx="200" ry="220" fill="none" stroke="#a78bfa" stroke-width="1" opacity="0.1"/>
+    
+    <!-- Top highlight reflection - glassy effect -->
+    <path d="
+      M 120 0
+      L 904 0
+      Q 1024 0, 1024 120
+      L 1024 200
+      Q 800 280, 512 280
+      Q 224 280, 0 200
+      L 0 120
+      Q 0 0, 120 0
+      Z
+    " fill="url(#glassOverlay)" opacity="0.4"/>
+    
+    <!-- Micro highlight on top edge -->
+    <path d="
+      M 227 2
+      L 797 2
+      Q 900 2, 960 40
+    " fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="2" stroke-linecap="round"/>
+    
+    <!-- Bottom subtle shadow gradient -->
+    <linearGradient id="bottomShadow" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:rgba(0,0,0,0)"/>
+      <stop offset="100%" style="stop-color:rgba(0,0,0,0.2)"/>
+    </linearGradient>
+    <rect x="0" y="800" width="1024" height="224" fill="url(#bottomShadow)"/>
+    
+  </g>
+</svg>

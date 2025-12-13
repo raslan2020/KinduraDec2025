@@ -1,0 +1,14 @@
+Test Medical Report
+
+Patient: Test User
+Date: 2025-09-14
+
+Medications:
+- Aspirin 325mg twice daily
+- Vitamin D 1000 IU daily
+
+Lab Results:
+- Blood pressure: 120/80
+- Heart rate: 72 bpm
+
+This is a test medical report for PDF upload testing.
