@@ -33,9 +33,9 @@
 
 | Component | Technology | Location |
 |-----------|------------|----------|
-| Mobile App | Flutter/Dart | `/lib/` |
-| Backend API | Django/Python | `/KinduraAPIs-0.0.1/` |
-| Voice Agent | LiveKit/Python | `/kinduralivekit-0.0.1/` |
+| Mobile App | Flutter/Dart | `/flutter/` |
+| Backend API | Django/Python | `/django/` |
+| Voice Agent | LiveKit/Python | `/livekit/` |
 | Database | PostgreSQL | Configured in Django settings |
 
 ---
@@ -98,41 +98,30 @@
 ## Project Structure
 
 ```
-Kinduraios/
-├── lib/                              # Flutter app source code
-│   ├── main.dart                     # App entry point
-│   ├── common_widgets/               # Reusable UI components
-│   ├── data/                         # Network & API layer
-│   │   ├── network/                  # HTTP client services
-│   │   └── response/                 # API response models
-│   ├── models/                       # Data models (JSON serializable)
-│   │   ├── medication/               # Medication tracking models
-│   │   ├── medical_reports/          # Lab reports, biomarkers
-│   │   ├── contact/                  # User contacts
-│   │   └── user_profile/             # User profile data
-│   ├── repository/                   # Data repositories
-│   │   ├── medication_repository/    # Medication CRUD
-│   │   ├── medical_reports_repository/ # Medical docs
-│   │   └── home_repository/          # General APIs
-│   ├── res/                          # Resources
-│   │   ├── app_url/                  # API endpoints
-│   │   ├── colors/                   # Theme colors
-│   │   └── routes/                   # Navigation routes
-│   ├── screens/                      # UI screens
-│   │   ├── home/                     # Dashboard + LiveKit
-│   │   ├── medication/               # Medication management
-│   │   ├── meds_vitamin/             # Daily dose tracking
-│   │   ├── labs/                     # Lab results view
-│   │   ├── scan/                     # PDF upload
-│   │   ├── profile/                  # User settings
-│   │   └── kindura_reports/          # Patient reports
-│   ├── services/                     # App services
-│   │   ├── notification_service.dart # Push notifications
-│   │   ├── voice_service.dart        # Voice trigger
-│   │   └── theme_service.dart        # Dark/Light mode
-│   └── utils/                        # Utilities
+KinduraDec2025/
+├── flutter/                          # Flutter mobile app
+│   ├── lib/                          # Flutter app source code
+│   │   ├── main.dart                 # App entry point
+│   │   ├── common_widgets/           # Reusable UI components
+│   │   ├── data/                     # Network & API layer
+│   │   │   ├── network/              # HTTP client services
+│   │   │   └── response/             # API response models
+│   │   ├── models/                   # Data models (JSON serializable)
+│   │   │   ├── medication/           # Medication tracking models
+│   │   │   ├── medical_reports/      # Lab reports, biomarkers
+│   │   │   ├── contact/              # User contacts
+│   │   │   └── user_profile/         # User profile data
+│   │   ├── repository/               # Data repositories
+│   │   ├── res/                      # Resources (colors, routes, URLs)
+│   │   ├── screens/                  # UI screens
+│   │   ├── services/                 # App services
+│   │   └── utils/                    # Utilities
+│   ├── ios/                          # iOS native code
+│   ├── android/                      # Android native code
+│   ├── watchos/                      # Apple Watch app
+│   └── pubspec.yaml                  # Flutter dependencies
 │
-├── KinduraAPIs-0.0.1/               # Django backend
+├── django/                           # Django backend
 │   ├── manage.py                     # Django management
 │   ├── medical_app/                  # Project settings
 │   │   ├── settings.py               # Database, apps config
@@ -143,16 +132,11 @@ Kinduraios/
 │   │   ├── views.py                  # API endpoints
 │   │   └── serializers.py            # Data serialization
 │   ├── medicines/                    # Medication tracking
-│   │   ├── models.py                 # Medicine, MedicationEvent
-│   │   ├── views.py                  # CRUD endpoints
-│   │   └── serializers.py
 │   ├── health_profile/               # Health data
-│   │   ├── models.py                 # Biomarkers, Vitals
-│   │   └── views.py                  # Lab results API
-│   ├── courses/                      # Medical documents
+│   ├── medical_reports/              # Medical documents
 │   └── livekit_app/                  # LiveKit token generation
 │
-├── kinduralivekit-0.0.1/            # LiveKit voice agent
+├── livekit/                          # LiveKit voice agent
 │   ├── agent.py                      # Main agent entry point
 │   └── utils/
 │       ├── global_variables.py       # Agent prompts, configs
@@ -166,14 +150,9 @@ Kinduraios/
 │   ├── DEVELOPER_GUIDE.md            # This file
 │   └── RAG_PLAN.md                   # Future RAG implementation
 │
-├── ios/                              # iOS native code
-├── android/                          # Android native code
-├── watchos/                          # Apple Watch app
-│
 ├── setup_local.sh                    # Local dev setup script
 ├── startkindura.sh                   # Start all services
-├── CLAUDE.md                         # AI assistant instructions
-└── pubspec.yaml                      # Flutter dependencies
+└── CLAUDE.md                         # AI assistant instructions
 ```
 
 ---
@@ -338,13 +317,13 @@ Run `flutter pub run build_runner build` to generate `.g.dart` files.
 
 | File | Purpose |
 |------|---------|
-| `lib/main.dart` | App entry point, registers services |
-| `lib/res/app_url/app_url.dart` | API endpoint URLs |
-| `lib/res/colors/app_color.dart` | Theme colors |
-| `lib/screens/home/home_controller.dart` | Dashboard + LiveKit connection |
-| `lib/screens/medication/medication_controller.dart` | Medication management |
-| `lib/screens/meds_vitamin/meds_vitamin_screen.dart` | Daily dose tracking UI |
-| `lib/data/network/network_api_services.dart` | HTTP client |
+| `flutter/lib/main.dart` | App entry point, registers services |
+| `flutter/lib/res/app_url/app_url.dart` | API endpoint URLs |
+| `flutter/lib/res/colors/app_color.dart` | Theme colors |
+| `flutter/lib/screens/home/home_controller.dart` | Dashboard + LiveKit connection |
+| `flutter/lib/screens/medication/medication_controller.dart` | Medication management |
+| `flutter/lib/screens/meds_vitamin/meds_vitamin_screen.dart` | Daily dose tracking UI |
+| `flutter/lib/data/network/network_api_services.dart` | HTTP client |
 
 ---
 
@@ -353,7 +332,7 @@ Run `flutter pub run build_runner build` to generate `.g.dart` files.
 ### Project Configuration
 
 ```python
-# KinduraAPIs-0.0.1/medical_app/settings.py
+# django/medical_app/settings.py
 
 DATABASES = {
     'default': {
@@ -509,7 +488,7 @@ def get_user_from_token(request):
 ### Agent Entry Point
 
 ```python
-# kinduralivekit-0.0.1/agent.py
+# livekit/agent.py
 
 from livekit import agents
 from livekit.agents import AgentSession, function_tool
@@ -596,7 +575,7 @@ async def get_lab_results(category: str = None) -> str:
 
 ### Agent Prompt
 
-The agent prompt is in `kinduralivekit-0.0.1/utils/global_variables.py`:
+The agent prompt is in `livekit/utils/global_variables.py`:
 
 ```python
 agent_prompt = """
@@ -700,7 +679,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 
 # Install Django dependencies
-cd KinduraAPIs-0.0.1
+cd django
 pip install -r requirements.txt
 
 # Run migrations
@@ -713,10 +692,12 @@ python manage.py createsuperuser
 python manage.py runserver
 
 # In another terminal, start LiveKit agent
-cd kinduralivekit-0.0.1
+cd livekit
+source venv/bin/activate  # or ../.venv/bin/activate
 python agent.py dev
 
 # In another terminal, start Flutter
+cd flutter
 flutter pub get
 flutter run
 ```

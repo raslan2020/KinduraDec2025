@@ -1,0 +1,128 @@
+{
+  "source": "/Users/toheedahmadnaveed/Desktop/Projects/KinduraDec2025/kindura_flutter/watchos/KinduraWatch/ContentView.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Vitals",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 40
+        }
+      },
+      {
+        "comment": "",
+        "key": "Sleep",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 97
+        }
+      },
+      {
+        "comment": "",
+        "key": "Last Night",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 104
+        }
+      },
+      {
+        "comment": "",
+        "key": "--",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 113
+        }
+      },
+      {
+        "comment": "",
+        "key": "Monitoring",
+        "location": {
+          "startingColumn": 66,
+          "startingLine": 149
+        }
+      },
+      {
+        "comment": "",
+        "key": "Not Active",
+        "location": {
+          "startingColumn": 81,
+          "startingLine": 149
+        }
+      },
+      {
+        "comment": "",
+        "key": "No falls detected",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 220
+        }
+      },
+      {
+        "comment": "",
+        "key": "Fall Detection",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 170
+        }
+      },
+      {
+        "comment": "",
+        "key": "Continuous monitoring",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 184
+        }
+      },
+      {
+        "comment": "",
+        "key": "Active",
+        "location": {
+          "startingColumn": 65,
+          "startingLine": 181
+        }
+      },
+      {
+        "comment": "",
+        "key": "Disabled",
+        "location": {
+          "startingColumn": 76,
+          "startingLine": 181
+        }
+      },
+      {
+        "comment": "",
+        "key": "Recent Events",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 196
+        }
+      },
+      {
+        "comment": "",
+        "key": "Resolved",
+        "location": {
+          "startingColumn": 58,
+          "startingLine": 208
+        }
+      },
+      {
+        "comment": "",
+        "key": "Pending",
+        "location": {
+          "startingColumn": 71,
+          "startingLine": 208
+        }
+      },
+      {
+        "comment": "",
+        "key": "Alert Caregiver",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 232
+        }
+      }
+    ]
+  },
+  "version": 1
+}

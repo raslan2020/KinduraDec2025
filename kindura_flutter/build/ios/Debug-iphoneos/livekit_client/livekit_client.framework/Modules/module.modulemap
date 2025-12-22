@@ -1,0 +1,11 @@
+framework module livekit_client {
+  umbrella header "livekit_client-umbrella.h"
+
+  export *
+  module * { export * }
+}
+
+module livekit_client.Swift {
+  header "livekit_client-Swift.h"
+  requires objc
+}

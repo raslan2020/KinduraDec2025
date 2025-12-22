@@ -4,17 +4,27 @@
 
 echo "Starting Kindura Django API Server..."
 
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # Navigate to Django project directory
-cd /Users/ralabaji/Kinduraios/KinduraAPIs-0.0.1
+cd "$SCRIPT_DIR/django"
 
-# Activate virtual environment
-source venv/bin/activate
-
-# Check if .env file exists
-if [ ! -f .env ]; then
-    echo "Error: .env file not found in KinduraAPIs-0.0.1 directory"
-    echo "Please ensure .env file exists with proper configuration"
+# Activate virtual environment (try both locations)
+if [ -d "../.venv" ]; then
+    source ../.venv/bin/activate
+elif [ -d "venv" ]; then
+    source venv/bin/activate
+else
+    echo "Error: Virtual environment not found"
+    echo "Please create one with: python3 -m venv .venv (in project root)"
     exit 1
+fi
+
+# Check if .env file exists (optional for local dev)
+if [ -f "../.env.local" ]; then
+    export $(cat ../.env.local | grep -v '^#' | xargs)
+    echo "Loaded environment from .env.local"
 fi
 
 # Apply any pending migrations

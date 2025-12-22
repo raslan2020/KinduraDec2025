@@ -4,16 +4,34 @@
 
 echo "Starting Kindura LiveKit Agent..."
 
-# Navigate to LiveKit agent directory
-cd /Users/ralabaji/Kinduraios/kinduralivekit-0.0.1
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Activate virtual environment
-source venv/bin/activate
+# Navigate to LiveKit agent directory
+cd "$SCRIPT_DIR/livekit"
+
+# Activate virtual environment (try both locations)
+if [ -d "venv" ]; then
+    source venv/bin/activate
+elif [ -d "../.venv" ]; then
+    source ../.venv/bin/activate
+else
+    echo "Error: Virtual environment not found"
+    echo "Please create one with: python3 -m venv venv (in livekit/)"
+    exit 1
+fi
 
 # Check if .env file exists
-if [ ! -f .env ]; then
-    echo "Error: .env file not found in kinduralivekit-0.0.1 directory"
+if [ ! -f ".env" ]; then
+    echo "Error: .env file not found in livekit/ directory"
     echo "Please ensure .env file exists with proper configuration"
+    echo ""
+    echo "Required variables:"
+    echo "  LIVEKIT_URL=wss://your-project.livekit.cloud"
+    echo "  LIVEKIT_API_KEY=your_api_key"
+    echo "  LIVEKIT_API_SECRET=your_api_secret"
+    echo "  OPENAI_API_KEY=your_openai_key"
+    echo "  DEEPGRAM_API_KEY=your_deepgram_key"
     exit 1
 fi
 
@@ -30,4 +48,4 @@ fi
 
 # Start the LiveKit agent
 echo "Starting LiveKit agent..."
-python agent.py
+python agent.py start

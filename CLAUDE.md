@@ -9,6 +9,16 @@
 ## Project Overview
 Kindura AI: Flutter health/wellness app with LiveKit voice AI integration. MVVM + Repository pattern with GetX state management. Professional Ornament-inspired theme with comprehensive medication tracking, lab reports, and voice-controlled health monitoring.
 
+## Project Structure
+```
+KinduraDec2025/
+├── flutter/          # Flutter mobile app (iOS/Android/watchOS)
+├── django/           # Django REST API backend
+├── livekit/          # LiveKit voice AI agent
+├── docs/             # Additional documentation
+└── scripts           # Startup and setup scripts
+```
+
 ## Local Development Setup
 The project is configured for local development with PostgreSQL database for production-ready testing:
 
@@ -23,7 +33,7 @@ The project is configured for local development with PostgreSQL database for pro
   - User: `kindura_user`
   - Password: `kindura_pass`
   - Configured via environment variables in Django settings
-- **API URL**: Configurable via `lib/res/app_url/app_url.dart`
+- **API URL**: Configurable via `flutter/lib/res/app_url/app_url.dart`
   ```dart
   static const bool isLocalEnvironment = true; // Change to false for production
   ```
@@ -56,7 +66,7 @@ DB_PASSWORD=kindura_pass
 3. Token is never hardcoded in source code
 4. Each developer has their own local token (not shared)
 
-image.png### PostgreSQL Management:
+### PostgreSQL Management:
 ```bash
 # Start PostgreSQL service
 brew services start postgresql@15
@@ -70,7 +80,7 @@ brew services stop postgresql@15
 # Reset database
 /opt/homebrew/opt/postgresql@15/bin/dropdb kindura_db
 /opt/homebrew/opt/postgresql@15/bin/createdb kindura_db
-cd KinduraAPIs-0.0.1 && ../.venv/bin/python manage.py migrate
+cd django && ../.venv/bin/python manage.py migrate
 ```
 
 ### Creating Test Users:
@@ -91,7 +101,7 @@ curl -X POST http://127.0.0.1:8000/api/users/signup/ \
   -d '{"username":"testuser","email":"test@kindura.com","password":"TestPass123","confirm_password":"TestPass123","first_name":"Test","last_name":"User","date_of_birth":"1990-01-01","gender":"M"}'
 
 # Option 2: Use Django shell
-cd KinduraAPIs-0.0.1
+cd django
 ../.venv/bin/python manage.py shell
 >>> from users.models import User, UserToken
 >>> user = User.objects.create_user(username='testuser', email='test@kindura.com', password='TestPass123')
@@ -99,14 +109,14 @@ cd KinduraAPIs-0.0.1
 >>> print(f'Token: {token.token}')
 
 # Option 3: Create admin user
-cd KinduraAPIs-0.0.1
+cd django
 ../.venv/bin/python manage.py createsuperuser
 ```
 
 **After manual user creation, update .env.local:**
 ```bash
 # Get token from database
-cd KinduraAPIs-0.0.1
+cd django
 ../.venv/bin/python -c "
 from users.models import User, UserToken
 import django, os
@@ -131,11 +141,11 @@ print(f'LOCAL_DEV_TOKEN={token.token}')
 
 ### Core Models Structure:
 ```
-/lib/models/
+flutter/lib/models/
 ├── medication/medication_models.dart    # Medication, DoseEvent, Reminders
-├── user/user_models.dart               # User profiles, preferences
-├── labs/lab_models.dart                # Lab reports, biomarkers
-└── shared/common_models.dart           # Status, ApiResponse
+├── user_profile/user_profile_model.dart # User profiles, preferences
+├── biomarkers/biomarker_models.dart     # Lab reports, biomarkers
+└── medical_reports/                     # Medical documents
 ```
 
 ### Key Model Classes:
@@ -194,15 +204,15 @@ This tracking data feeds into:
 
 ## Service Architecture
 ```
-/lib/services/
+flutter/lib/services/
 ├── notification_service.dart   # Local notifications, reminders
 ├── voice_service.dart         # Speech recognition, voice commands
-└── performance_monitor.dart   # API timing, error tracking
+└── theme_service.dart         # Dark/Light mode theming
 ```
 
 ## App Structure & Navigation
 ```
-/lib/screens/
+flutter/lib/screens/
 ├── splash_screen/           # App initialization
 ├── home/                   # Dashboard with health overview
 ├── medication/             # Medication tracking & management

@@ -61,46 +61,46 @@ echo "⚙️  Starting Django API Server in new terminal..."
 cd "$SCRIPT_DIR"
 if [ -d ".venv" ]; then
     # Check if requirements are met
-    if [ -f "requirements.txt" ]; then
+    if [ -f "django/requirements.txt" ]; then
         echo "🔍 Checking Django dependencies..."
         source .venv/bin/activate
-        pip install -r requirements.txt --quiet
+        pip install -r django/requirements.txt --quiet
         deactivate
     fi
 
     # Run Django migrations if needed
     echo "🔄 Running Django migrations..."
     source .venv/bin/activate
-    cd KinduraAPIs-0.0.1
+    cd django
     python manage.py migrate --no-input
     cd ..
     deactivate
 
     # Start Django server in new terminal
     # Use 0.0.0.0 to allow connections from Watch simulator
-    osascript -e "tell application \"Terminal\" to do script \"cd '$SCRIPT_DIR/KinduraAPIs-0.0.1' && source ../.venv/bin/activate && echo '🚀 Django API Server Starting (PostgreSQL Database)...' && python manage.py runserver 0.0.0.0:8000\""
+    osascript -e "tell application \"Terminal\" to do script \"cd '$SCRIPT_DIR/django' && source ../.venv/bin/activate && echo '🚀 Django API Server Starting (PostgreSQL Database)...' && python manage.py runserver 0.0.0.0:8000\""
     echo "✅ Django API started in new Terminal tab (PostgreSQL)"
     sleep 3  # Give it time to start
 else
     echo "❌ Django .venv not found in project root/"
-    echo "💡 Run: python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt"
+    echo "💡 Run: python3 -m venv .venv && source .venv/bin/activate && pip install -r django/requirements.txt"
     exit 1
 fi
 
 echo "🎤 Starting LiveKit Agent in new terminal..."
-cd "$SCRIPT_DIR/kinduralivekit-0.0.1"
+cd "$SCRIPT_DIR/livekit"
 if [ -d "venv" ]; then
     # Check if .env file exists
     if [ ! -f ".env" ]; then
-        echo "⚠️  .env file not found in kinduralivekit-0.0.1/"
+        echo "⚠️  .env file not found in livekit/"
         echo "💡 Create .env with LIVEKIT_API_KEY, LIVEKIT_API_SECRET, etc."
     fi
     
     # Check if requirements are met
-    if [ -f "requirements.txt" ]; then
+    if [ -f "requirement.txt" ]; then
         echo "🔍 Checking LiveKit dependencies..."
         source venv/bin/activate
-        pip install -r requirements.txt --quiet
+        pip install -r requirement.txt --quiet
         deactivate
     fi
     
@@ -116,12 +116,12 @@ if [ -d "venv" ]; then
     
     # Start LiveKit agent in new terminal
     echo "🚀 Starting LiveKit agent in new Terminal tab..."
-    osascript -e "tell application \"Terminal\" to do script \"cd '$SCRIPT_DIR/kinduralivekit-0.0.1' && source venv/bin/activate && echo '🎤 LiveKit Agent Starting...' && python agent.py start\""
+    osascript -e "tell application \"Terminal\" to do script \"cd '$SCRIPT_DIR/livekit' && source venv/bin/activate && echo '🎤 LiveKit Agent Starting...' && python agent.py start\""
     echo "✅ LiveKit Agent started in new Terminal tab"
     sleep 3  # Give it time to start
 else
-    echo "❌ LiveKit venv not found in kinduralivekit-0.0.1/"
-    echo "💡 Run: cd kinduralivekit-0.0.1 && python3 -m venv venv"
+    echo "❌ LiveKit venv not found in livekit/"
+    echo "💡 Run: cd livekit && python3 -m venv venv"
     exit 1
 fi
 
@@ -159,7 +159,7 @@ sleep 10
 
 # Build and install watchOS app
 echo "⌚ Building and installing Apple Watch app..."
-cd "$SCRIPT_DIR/watchos"
+cd "$SCRIPT_DIR/flutter/watchos"
 if [ -d "KinduraWatch.xcodeproj" ]; then
     echo "🔨 Building KinduraWatch..."
 
@@ -226,13 +226,13 @@ if [ -d "KinduraWatch.xcodeproj" ]; then
         grep -A2 "error:" /tmp/watch_build.log || true
     fi
 else
-    echo "⚠️  watchOS project not found at watchos/KinduraWatch.xcodeproj"
+    echo "⚠️  watchOS project not found at flutter/watchos/KinduraWatch.xcodeproj"
 fi
 cd "$SCRIPT_DIR"
 
 # Check Flutter installation
 echo "🔍 Checking Flutter installation..."
-cd "$SCRIPT_DIR"
+cd "$SCRIPT_DIR/flutter"
 if ! command -v flutter &> /dev/null; then
     echo "❌ Flutter not found. Please install Flutter."
     exit 1
@@ -264,6 +264,8 @@ else
     echo "✅ Flutter App started (PID: $FLUTTER_PID)"
 fi
 
+cd "$SCRIPT_DIR"
+
 echo ""
 echo "🎉 All Kindura AI services started successfully!"
 echo ""
@@ -272,6 +274,11 @@ echo "  PostgreSQL DB:  localhost:5432/kindura_db (kindura_user)"
 echo "  Django API:     New Terminal Tab (http://127.0.0.1:8000)"
 echo "  LiveKit Agent:  New Terminal Tab (wss://kindura-u99yilqz.livekit.cloud)"
 echo "  Flutter App:    PID $FLUTTER_PID (Running on iOS Simulator)"
+echo ""
+echo "📁 Project Structure:"
+echo "  flutter/        Flutter mobile app"
+echo "  django/         Django REST API backend"
+echo "  livekit/        LiveKit voice AI agent"
 echo ""
 echo "🌐 Services:"
 echo "  Django API:     http://127.0.0.1:8000 (Local Development)"
@@ -291,10 +298,10 @@ echo ""
 echo "🔧 Troubleshooting:"
 echo "  • If no audio: Test on physical device, not simulator"
 echo "  • If agent doesn't respond: Check LiveKit agent logs above"
-echo "  • If build fails: Run 'flutter clean && flutter pub get'"
+echo "  • If build fails: Run 'flutter clean && flutter pub get' in flutter/"
 echo "  • API not working: Check Django logs in the terminal tab"
-echo "  • DB issues: Run 'python manage.py migrate' in the Django directory"
-echo "  • Switch to production: Change 'isLocalEnvironment = false' in app_url.dart"
+echo "  • DB issues: Run 'python manage.py migrate' in django/"
+echo "  • Switch to production: Change 'isLocalEnvironment = false' in flutter/lib/res/app_url/app_url.dart"
 echo ""
 echo "📊 Logs available at:"
 echo "  • Django: Check terminal output above"

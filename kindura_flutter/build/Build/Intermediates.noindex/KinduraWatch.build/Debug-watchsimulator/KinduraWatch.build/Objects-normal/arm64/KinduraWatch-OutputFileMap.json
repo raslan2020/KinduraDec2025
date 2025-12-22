@@ -1,0 +1,48 @@
+{
+  "" : {
+    "diagnostics" : "/Users/toheedahmadnaveed/Desktop/Projects/KinduraDec2025/kindura_flutter/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchsimulator/KinduraWatch.build/Objects-normal/arm64/KinduraWatch-master.dia",
+    "emit-module-dependencies" : "/Users/toheedahmadnaveed/Desktop/Projects/KinduraDec2025/kindura_flutter/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchsimulator/KinduraWatch.build/Objects-normal/arm64/KinduraWatch-master-emit-module.d",
+    "emit-module-diagnostics" : "/Users/toheedahmadnaveed/Desktop/Projects/KinduraDec2025/kindura_flutter/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchsimulator/KinduraWatch.build/Objects-normal/arm64/KinduraWatch-master-emit-module.dia",
+    "swift-dependencies" : "/Users/toheedahmadnaveed/Desktop/Projects/KinduraDec2025/kindura_flutter/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchsimulator/KinduraWatch.build/Objects-normal/arm64/KinduraWatch-master.swiftdeps"
+  },
+  "/Users/toheedahmadnaveed/Desktop/Projects/KinduraDec2025/kindura_flutter/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchsimulator/KinduraWatch.build/DerivedSources/GeneratedAssetSymbols.swift" : {
+    "const-values" : "/Users/toheedahmadnaveed/Desktop/Projects/KinduraDec2025/kindura_flutter/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchsimulator/KinduraWatch.build/Objects-normal/arm64/GeneratedAssetSymbols.swiftconstvalues",
+    "dependencies" : "/Users/toheedahmadnaveed/Desktop/Projects/KinduraDec2025/kindura_flutter/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchsimulator/KinduraWatch.build/Objects-normal/arm64/GeneratedAssetSymbols.d",
+    "diagnostics" : "/Users/toheedahmadnaveed/Desktop/Projects/KinduraDec2025/kindura_flutter/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchsimulator/KinduraWatch.build/Objects-normal/arm64/GeneratedAssetSymbols.dia",
+    "index-unit-output-path" : "/KinduraWatch.build/Debug-watchsimulator/KinduraWatch.build/Objects-normal/arm64/GeneratedAssetSymbols.o",
+    "llvm-bc" : "/Users/toheedahmadnaveed/Desktop/Projects/KinduraDec2025/kindura_flutter/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchsimulator/KinduraWatch.build/Objects-normal/arm64/GeneratedAssetSymbols.bc",
+    "object" : "/Users/toheedahmadnaveed/Desktop/Projects/KinduraDec2025/kindura_flutter/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchsimulator/KinduraWatch.build/Objects-normal/arm64/GeneratedAssetSymbols.o",
+    "swift-dependencies" : "/Users/toheedahmadnaveed/Desktop/Projects/KinduraDec2025/kindura_flutter/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchsimulator/KinduraWatch.build/Objects-normal/arm64/GeneratedAssetSymbols.swiftdeps",
+    "swiftmodule" : "/Users/toheedahmadnaveed/Desktop/Projects/KinduraDec2025/kindura_flutter/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchsimulator/KinduraWatch.build/Objects-normal/arm64/GeneratedAssetSymbols~partial.swiftmodule"
+  },
+  "/Users/toheedahmadnaveed/Desktop/Projects/KinduraDec2025/kindura_flutter/watchos/KinduraWatch/ContentView.swift" : {
+    "const-values" : "/Users/toheedahmadnaveed/Desktop/Projects/KinduraDec2025/kindura_flutter/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchsimulator/KinduraWatch.build/Objects-normal/arm64/ContentView.swiftconstvalues",
+    "dependencies" : "/Users/toheedahmadnaveed/Desktop/Projects/KinduraDec2025/kindura_flutter/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchsimulator/KinduraWatch.build/Objects-normal/arm64/ContentView.d",
+    "diagnostics" : "/Users/toheedahmadnaveed/Desktop/Projects/KinduraDec2025/kindura_flutter/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchsimulator/KinduraWatch.build/Objects-normal/arm64/ContentView.dia",
+    "index-unit-output-path" : "/KinduraWatch.build/Debug-watchsimulator/KinduraWatch.build/Objects-normal/arm64/ContentView.o",
+    "llvm-bc" : "/Users/toheedahmadnaveed/Desktop/Projects/KinduraDec2025/kindura_flutter/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchsimulator/KinduraWatch.build/Objects-normal/arm64/ContentView.bc",
+    "object" : "/Users/toheedahmadnaveed/Desktop/Projects/KinduraDec2025/kindura_flutter/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchsimulator/KinduraWatch.build/Objects-normal/arm64/ContentView.o",
+    "swift-dependencies" : "/Users/toheedahmadnaveed/Desktop/Projects/KinduraDec2025/kindura_flutter/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchsimulator/KinduraWatch.build/Objects-normal/arm64/ContentView.swiftdeps",
+    "swiftmodule" : "/Users/toheedahmadnaveed/Desktop/Projects/KinduraDec2025/kindura_flutter/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchsimulator/KinduraWatch.build/Objects-normal/arm64/ContentView~partial.swiftmodule"
+  },
+  "/Users/toheedahmadnaveed/Desktop/Projects/KinduraDec2025/kindura_flutter/watchos/KinduraWatch/HealthManager.swift" : {
+    "const-values" : "/Users/toheedahmadnaveed/Desktop/Projects/KinduraDec2025/kindura_flutter/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchsimulator/KinduraWatch.build/Objects-normal/arm64/HealthManager.swiftconstvalues",
+    "dependencies" : "/Users/toheedahmadnaveed/Desktop/Projects/KinduraDec2025/kindura_flutter/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchsimulator/KinduraWatch.build/Objects-normal/arm64/HealthManager.d",
+    "diagnostics" : "/Users/toheedahmadnaveed/Desktop/Projects/KinduraDec2025/kindura_flutter/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchsimulator/KinduraWatch.build/Objects-normal/arm64/HealthManager.dia",
+    "index-unit-output-path" : "/KinduraWatch.build/Debug-watchsimulator/KinduraWatch.build/Objects-normal/arm64/HealthManager.o",
+    "llvm-bc" : "/Users/toheedahmadnaveed/Desktop/Projects/KinduraDec2025/kindura_flutter/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchsimulator/KinduraWatch.build/Objects-normal/arm64/HealthManager.bc",
+    "object" : "/Users/toheedahmadnaveed/Desktop/Projects/KinduraDec2025/kindura_flutter/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchsimulator/KinduraWatch.build/Objects-normal/arm64/HealthManager.o",
+    "swift-dependencies" : "/Users/toheedahmadnaveed/Desktop/Projects/KinduraDec2025/kindura_flutter/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchsimulator/KinduraWatch.build/Objects-normal/arm64/HealthManager.swiftdeps",
+    "swiftmodule" : "/Users/toheedahmadnaveed/Desktop/Projects/KinduraDec2025/kindura_flutter/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchsimulator/KinduraWatch.build/Objects-normal/arm64/HealthManager~partial.swiftmodule"
+  },
+  "/Users/toheedahmadnaveed/Desktop/Projects/KinduraDec2025/kindura_flutter/watchos/KinduraWatch/KinduraWatchApp.swift" : {
+    "const-values" : "/Users/toheedahmadnaveed/Desktop/Projects/KinduraDec2025/kindura_flutter/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchsimulator/KinduraWatch.build/Objects-normal/arm64/KinduraWatchApp.swiftconstvalues",
+    "dependencies" : "/Users/toheedahmadnaveed/Desktop/Projects/KinduraDec2025/kindura_flutter/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchsimulator/KinduraWatch.build/Objects-normal/arm64/KinduraWatchApp.d",
+    "diagnostics" : "/Users/toheedahmadnaveed/Desktop/Projects/KinduraDec2025/kindura_flutter/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchsimulator/KinduraWatch.build/Objects-normal/arm64/KinduraWatchApp.dia",
+    "index-unit-output-path" : "/KinduraWatch.build/Debug-watchsimulator/KinduraWatch.build/Objects-normal/arm64/KinduraWatchApp.o",
+    "llvm-bc" : "/Users/toheedahmadnaveed/Desktop/Projects/KinduraDec2025/kindura_flutter/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchsimulator/KinduraWatch.build/Objects-normal/arm64/KinduraWatchApp.bc",
+    "object" : "/Users/toheedahmadnaveed/Desktop/Projects/KinduraDec2025/kindura_flutter/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchsimulator/KinduraWatch.build/Objects-normal/arm64/KinduraWatchApp.o",
+    "swift-dependencies" : "/Users/toheedahmadnaveed/Desktop/Projects/KinduraDec2025/kindura_flutter/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchsimulator/KinduraWatch.build/Objects-normal/arm64/KinduraWatchApp.swiftdeps",
+    "swiftmodule" : "/Users/toheedahmadnaveed/Desktop/Projects/KinduraDec2025/kindura_flutter/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchsimulator/KinduraWatch.build/Objects-normal/arm64/KinduraWatchApp~partial.swiftmodule"
+  }
+}

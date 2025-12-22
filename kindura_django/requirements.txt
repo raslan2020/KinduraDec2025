@@ -1,0 +1,27 @@
+# Django Core
+Django==5.2.3
+djangorestframework==3.16.0
+django-cors-headers==4.7.0
+
+# Database
+psycopg2-binary==2.9.9
+
+# ASGI / WebSockets
+daphne==4.1.2
+channels==4.2.0
+
+# LiveKit Integration
+livekit==0.5.0
+livekit-api==1.0.3
+
+# AI / OpenAI
+openai==1.95.0
+
+# PDF Processing
+PyPDF2==3.0.1
+PyMuPDF==1.26.3
+reportlab>=4.0.0
+
+# Utilities
+requests==2.32.4
+python-dotenv==1.0.0
