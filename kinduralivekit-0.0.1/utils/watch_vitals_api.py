@@ -64,7 +64,7 @@ class WatchVitalsService:
             return []
 
     def format_vitals_for_agent(self, vitals: dict) -> str:
-        """Format Watch vitals data for agent prompt"""
+        """Format Watch vitals data for agent prompt - comprehensive health data"""
         if not vitals:
             return "No Apple Watch data available."
 
@@ -73,14 +73,35 @@ class WatchVitalsService:
         if is_demo:
             return "No Apple Watch data synced yet. Patient has not connected their Apple Watch."
 
-        # Format the data
+        # === VITAL SIGNS ===
         heart_rate = vitals.get('heart_rate', 0)
         blood_oxygen = vitals.get('blood_oxygen', 0)
-        sleep_hours = vitals.get('sleep_hours', 0)
-        awakenings = vitals.get('awakenings', 0)
+        hrv = vitals.get('hrv', 0)
+        respiratory_rate = vitals.get('respiratory_rate', 0)
+
+        # === SLEEP DATA ===
+        sleep_hours = vitals.get('sleep_hours', vitals.get('total_sleep_hours', 0))
+        sleep_score = vitals.get('sleep_score', 0)
+        deep_sleep = vitals.get('deep_sleep_hours', 0)
+        rem_sleep = vitals.get('rem_sleep_hours', 0)
+        core_sleep = vitals.get('core_sleep_hours', 0)
+        awake_hours = vitals.get('awake_hours', vitals.get('awake_time_hours', 0))
+        awakenings = vitals.get('awakenings', vitals.get('awakenings_count', 0))
         sleep_quality = vitals.get('sleep_quality', 'unknown')
+
+        # === ACTIVITY DATA ===
+        steps = vitals.get('steps', 0)
+        calories = vitals.get('calories', 0)
+        distance_km = vitals.get('distance_km', 0)
+        exercise_minutes = vitals.get('exercise_minutes', 0)
+        floors_climbed = vitals.get('floors_climbed', 0)
+        stand_minutes = vitals.get('stand_minutes', 0)
+
+        # === FALLS ===
         falls_count = vitals.get('falls_count', 0)
-        last_updated = vitals.get('last_updated')
+        fall_detected = vitals.get('fall_detected', False)
+
+        last_updated = vitals.get('last_updated', vitals.get('recorded_at'))
 
         # Determine health status and alerts
         alerts = []
@@ -96,40 +117,83 @@ class WatchVitalsService:
 
         # Blood oxygen analysis
         oxygen_status = "normal"
-        if blood_oxygen < 95:
+        if blood_oxygen > 0 and blood_oxygen < 95:
             oxygen_status = "LOW"
             alerts.append(f"Low blood oxygen: {blood_oxygen}%")
 
         # Sleep analysis
-        sleep_status = "good"
-        if sleep_hours < 6:
-            sleep_status = "insufficient"
+        if sleep_hours > 0 and sleep_hours < 6:
             alerts.append(f"Insufficient sleep: only {sleep_hours:.1f} hours")
         if awakenings > 4:
-            alerts.append(f"Fragmented sleep: {awakenings} awakenings during the night")
+            alerts.append(f"Fragmented sleep: {awakenings} awakenings")
 
         # Fall detection
-        if falls_count > 0:
-            alerts.append(f"IMPORTANT: {falls_count} fall(s) detected in the past week")
+        if fall_detected:
+            alerts.append("URGENT: Recent fall detected!")
+        elif falls_count > 0:
+            alerts.append(f"Note: {falls_count} fall(s) recorded recently")
 
-        # Build summary - use clean speech-friendly format (no special characters)
-        summary = f"""Apple Watch Health Data:
-Heart Rate: {heart_rate:.0f} beats per minute, {heart_status}
-Blood Oxygen: {blood_oxygen:.0f} percent, {oxygen_status}
-Last Night Sleep: {sleep_hours:.1f} hours, {sleep_quality}
-Night Awakenings: {awakenings} times
-Falls Detected in past 7 days: {falls_count}"""
+        # Build comprehensive summary
+        summary = "Apple Watch Health Data:\n\n"
+
+        # Vital Signs Section
+        summary += "VITAL SIGNS:\n"
+        summary += f"Heart Rate: {heart_rate:.0f} beats per minute, {heart_status}\n"
+        summary += f"Blood Oxygen: {blood_oxygen:.0f} percent, {oxygen_status}\n"
+        if hrv > 0:
+            summary += f"Heart Rate Variability: {hrv:.0f} milliseconds\n"
+        if respiratory_rate > 0:
+            summary += f"Respiratory Rate: {respiratory_rate:.1f} breaths per minute\n"
+
+        # Sleep Section
+        summary += "\nSLEEP (Last Night):\n"
+        if sleep_hours > 0:
+            summary += f"Total Sleep: {sleep_hours:.1f} hours\n"
+            if sleep_score > 0:
+                summary += f"Sleep Score: {sleep_score} out of 100\n"
+            summary += f"Sleep Quality: {sleep_quality}\n"
+            if deep_sleep > 0 or rem_sleep > 0 or core_sleep > 0:
+                summary += f"Sleep Stages: Deep {deep_sleep:.1f}h, REM {rem_sleep:.1f}h, Core {core_sleep:.1f}h, Awake {awake_hours:.1f}h\n"
+            if awakenings > 0:
+                summary += f"Awakenings: {awakenings} times\n"
+        else:
+            summary += "No sleep data recorded\n"
+
+        # Activity Section
+        summary += "\nACTIVITY (Today):\n"
+        if steps > 0:
+            summary += f"Steps: {steps:,}\n"
+        if calories > 0:
+            summary += f"Calories Burned: {calories} kcal\n"
+        if distance_km > 0:
+            summary += f"Distance: {distance_km:.1f} kilometers\n"
+        if exercise_minutes > 0:
+            summary += f"Exercise: {exercise_minutes} minutes\n"
+        if floors_climbed > 0:
+            summary += f"Floors Climbed: {floors_climbed}\n"
+        if stand_minutes > 0:
+            summary += f"Standing Time: {stand_minutes} minutes\n"
+        if steps == 0 and calories == 0:
+            summary += "No activity data recorded yet\n"
+
+        # Falls Section
+        summary += "\nFALLS:\n"
+        if fall_detected:
+            summary += "Recent fall detected - check on patient!\n"
+        elif falls_count > 0:
+            summary += f"{falls_count} fall(s) recorded\n"
+        else:
+            summary += "No falls detected\n"
 
         if last_updated:
             try:
-                dt = datetime.fromisoformat(last_updated.replace('Z', '+00:00'))
-                summary += f"\n- Last Updated: {dt.strftime('%B %d, %Y at %I:%M %p')}"
+                dt = datetime.fromisoformat(str(last_updated).replace('Z', '+00:00'))
+                summary += f"\nLast Updated: {dt.strftime('%B %d, %Y at %I:%M %p')}"
             except:
                 pass
 
         if alerts:
-            # Remove emoji for speech-friendly output
-            summary += "\n\nHealth Alerts:\n" + "\n".join([f"Alert: {alert}" for alert in alerts])
+            summary += "\n\nHEALTH ALERTS:\n" + "\n".join([f"- {alert}" for alert in alerts])
 
         return summary
 

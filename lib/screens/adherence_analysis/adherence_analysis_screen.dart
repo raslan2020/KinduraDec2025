@@ -13,19 +13,23 @@ class AdherenceAnalysisScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final backgroundColor = isDark ? const Color(0xFF0F172A) : AppColor.surface;
+    final textColor = isDark ? Colors.white : AppColor.textPrimary;
+
     return Scaffold(
-      backgroundColor: AppColor.surface,
+      backgroundColor: backgroundColor,
       appBar: AppBar(
-        backgroundColor: AppColor.surface,
+        backgroundColor: backgroundColor,
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: AppColor.textPrimary),
+          icon: Icon(Icons.arrow_back, color: textColor),
           onPressed: () => Get.back(),
         ),
         title: Text(
           'Medication Analysis',
           style: TextStyle(
-            color: AppColor.textPrimary,
+            color: textColor,
             fontSize: 18.sp,
             fontWeight: FontWeight.w600,
           ),
@@ -51,19 +55,19 @@ class AdherenceAnalysisScreen extends StatelessWidget {
       ),
       body: Column(
         children: [
-          _buildPeriodSelector(),
-          _buildTabBar(),
+          _buildPeriodSelector(context),
+          _buildTabBar(context),
           Expanded(
             child: Obx(() {
               switch (controller.selectedTabIndex.value) {
                 case 0:
-                  return _buildOverviewTab();
+                  return _buildOverviewTab(context);
                 case 1:
-                  return _buildHistoryTab();
+                  return _buildHistoryTab(context);
                 case 2:
-                  return _buildAIInsightsTab();
+                  return _buildAIInsightsTab(context);
                 default:
-                  return _buildOverviewTab();
+                  return _buildOverviewTab(context);
               }
             }),
           ),
@@ -72,7 +76,12 @@ class AdherenceAnalysisScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildPeriodSelector() {
+  Widget _buildPeriodSelector(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final unselectedBg = isDark ? const Color(0xFF1E293B) : Colors.grey[100];
+    final unselectedBorder = isDark ? Colors.grey[700] : Colors.grey[300];
+    final unselectedText = isDark ? Colors.grey[400] : Colors.grey[600];
+
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
       child: Obx(() => Row(
@@ -85,17 +94,17 @@ class AdherenceAnalysisScreen extends StatelessWidget {
                     margin: EdgeInsets.symmetric(horizontal: 4.w),
                     padding: EdgeInsets.symmetric(vertical: 10.h),
                     decoration: BoxDecoration(
-                      color: isSelected ? AppColor.primaryColor : Colors.grey[100],
+                      color: isSelected ? AppColor.primaryColor : unselectedBg,
                       borderRadius: BorderRadius.circular(8.r),
                       border: Border.all(
-                        color: isSelected ? AppColor.primaryColor : Colors.grey[300]!,
+                        color: isSelected ? AppColor.primaryColor : unselectedBorder!,
                       ),
                     ),
                     child: Center(
                       child: Text(
                         period.capitalize!,
                         style: TextStyle(
-                          color: isSelected ? Colors.white : Colors.grey[600],
+                          color: isSelected ? Colors.white : unselectedText,
                           fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
                           fontSize: 14.sp,
                         ),
@@ -109,24 +118,29 @@ class AdherenceAnalysisScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildTabBar() {
+  Widget _buildTabBar(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final tabBgColor = isDark ? const Color(0xFF1E293B) : Colors.grey[100];
+    final selectedBg = isDark ? const Color(0xFF334155) : Colors.white;
+    final unselectedText = isDark ? Colors.grey[400] : Colors.grey[600];
+
     return Container(
       margin: EdgeInsets.symmetric(horizontal: 16.w),
       decoration: BoxDecoration(
-        color: Colors.grey[100],
+        color: tabBgColor,
         borderRadius: BorderRadius.circular(8.r),
       ),
       child: Obx(() => Row(
             children: [
-              _buildTab('Overview', 0),
-              _buildTab('History', 1),
-              _buildTab('AI Insights', 2),
+              _buildTab('Overview', 0, context, selectedBg, unselectedText, isDark),
+              _buildTab('History', 1, context, selectedBg, unselectedText, isDark),
+              _buildTab('AI Insights', 2, context, selectedBg, unselectedText, isDark),
             ],
           )),
     );
   }
 
-  Widget _buildTab(String title, int index) {
+  Widget _buildTab(String title, int index, BuildContext context, Color? selectedBg, Color? unselectedText, bool isDark) {
     final isSelected = controller.selectedTabIndex.value == index;
     return Expanded(
       child: GestureDetector(
@@ -134,9 +148,9 @@ class AdherenceAnalysisScreen extends StatelessWidget {
         child: Container(
           padding: EdgeInsets.symmetric(vertical: 12.h),
           decoration: BoxDecoration(
-            color: isSelected ? Colors.white : Colors.transparent,
+            color: isSelected ? selectedBg : Colors.transparent,
             borderRadius: BorderRadius.circular(8.r),
-            boxShadow: isSelected
+            boxShadow: isSelected && !isDark
                 ? [
                     BoxShadow(
                       color: Colors.black.withOpacity(0.1),
@@ -150,7 +164,7 @@ class AdherenceAnalysisScreen extends StatelessWidget {
             child: Text(
               title,
               style: TextStyle(
-                color: isSelected ? AppColor.primaryColor : Colors.grey[600],
+                color: isSelected ? AppColor.primaryColor : unselectedText,
                 fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
                 fontSize: 13.sp,
               ),
@@ -161,19 +175,19 @@ class AdherenceAnalysisScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildOverviewTab() {
+  Widget _buildOverviewTab(BuildContext context) {
     return Obx(() {
       final response = controller.historyResponse.value;
 
       return response.when(
         loading: () => Center(child: CircularProgressIndicator()),
-        error: (error) => _buildErrorState(error),
-        success: (data) => _buildOverviewContent(data),
+        error: (error) => _buildErrorState(error, context),
+        success: (data) => _buildOverviewContent(data, context),
       );
     });
   }
 
-  Widget _buildOverviewContent(MedicationHistoryResponse data) {
+  Widget _buildOverviewContent(MedicationHistoryResponse data, BuildContext context) {
     final summary = data.summary;
 
     return RefreshIndicator(
@@ -184,19 +198,19 @@ class AdherenceAnalysisScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildAdherenceCard(summary),
+            _buildAdherenceCard(summary, context),
             SizedBox(height: 16.h),
-            _buildDoseBreakdown(summary),
+            _buildDoseBreakdown(summary, context),
             SizedBox(height: 16.h),
             if (data.problematicMedications.isNotEmpty)
-              _buildProblematicMedications(data.problematicMedications),
+              _buildProblematicMedications(data.problematicMedications, context),
             if (data.byMedication.isNotEmpty) ...[
               SizedBox(height: 16.h),
-              _buildMedicationBreakdown(data.byMedication),
+              _buildMedicationBreakdown(data.byMedication, context),
             ],
             if (data.relatedSymptoms.isNotEmpty) ...[
               SizedBox(height: 16.h),
-              _buildRelatedSymptoms(data.relatedSymptoms),
+              _buildRelatedSymptoms(data.relatedSymptoms, context),
             ],
           ],
         ),
@@ -204,16 +218,18 @@ class AdherenceAnalysisScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildAdherenceCard(MedicationHistorySummary summary) {
+  Widget _buildAdherenceCard(MedicationHistorySummary summary, BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final percentage = summary.overallAdherence;
     final color = controller.getAdherenceColor(percentage);
     final emoji = controller.getAdherenceEmoji(percentage);
+    final subtitleColor = isDark ? Colors.grey[400] : Colors.grey[600];
 
     return Container(
       padding: EdgeInsets.all(20.w),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [color.withOpacity(0.1), color.withOpacity(0.05)],
+          colors: [color.withOpacity(isDark ? 0.2 : 0.1), color.withOpacity(isDark ? 0.1 : 0.05)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -245,7 +261,7 @@ class AdherenceAnalysisScreen extends StatelessWidget {
                     'Overall Adherence',
                     style: TextStyle(
                       fontSize: 14.sp,
-                      color: Colors.grey[600],
+                      color: subtitleColor,
                     ),
                   ),
                 ],
@@ -273,13 +289,19 @@ class AdherenceAnalysisScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildDoseBreakdown(MedicationHistorySummary summary) {
+  Widget _buildDoseBreakdown(MedicationHistorySummary summary, BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardBg = isDark ? const Color(0xFF1E293B) : Colors.white;
+    final borderColor = isDark ? Colors.grey[700] : Colors.grey[200];
+    final textColor = isDark ? Colors.white : AppColor.textPrimary;
+    final subtitleColor = isDark ? Colors.grey[400] : Colors.grey[600];
+
     return Container(
       padding: EdgeInsets.all(16.w),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cardBg,
         borderRadius: BorderRadius.circular(12.r),
-        border: Border.all(color: Colors.grey[200]!),
+        border: Border.all(color: borderColor!),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -289,28 +311,28 @@ class AdherenceAnalysisScreen extends StatelessWidget {
             style: TextStyle(
               fontSize: 16.sp,
               fontWeight: FontWeight.w600,
-              color: AppColor.textPrimary,
+              color: textColor,
             ),
           ),
           SizedBox(height: 16.h),
           Row(
             children: [
-              Expanded(child: _buildDoseStat('Total', summary.totalEvents, Colors.blue)),
-              Expanded(child: _buildDoseStat('Taken', summary.taken, Colors.green)),
-              Expanded(child: _buildDoseStat('Late', summary.late, Colors.orange)),
-              Expanded(child: _buildDoseStat('Missed', summary.missed, Colors.red)),
+              Expanded(child: _buildDoseStat('Total', summary.totalEvents, Colors.blue, subtitleColor)),
+              Expanded(child: _buildDoseStat('Taken', summary.taken, Colors.green, subtitleColor)),
+              Expanded(child: _buildDoseStat('Late', summary.late, Colors.orange, subtitleColor)),
+              Expanded(child: _buildDoseStat('Missed', summary.missed, Colors.red, subtitleColor)),
             ],
           ),
           if (summary.skipped > 0) ...[
             SizedBox(height: 12.h),
-            _buildDoseStat('Skipped', summary.skipped, Colors.grey),
+            _buildDoseStat('Skipped', summary.skipped, Colors.grey, subtitleColor),
           ],
         ],
       ),
     );
   }
 
-  Widget _buildDoseStat(String label, int count, Color color) {
+  Widget _buildDoseStat(String label, int count, Color color, Color? subtitleColor) {
     return Column(
       children: [
         Container(
@@ -336,18 +358,22 @@ class AdherenceAnalysisScreen extends StatelessWidget {
           label,
           style: TextStyle(
             fontSize: 12.sp,
-            color: Colors.grey[600],
+            color: subtitleColor,
           ),
         ),
       ],
     );
   }
 
-  Widget _buildProblematicMedications(List<MedicationStats> medications) {
+  Widget _buildProblematicMedications(List<MedicationStats> medications, BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bgColor = isDark ? Colors.red[900]!.withOpacity(0.3) : Colors.red[50];
+    final textColor = isDark ? Colors.white : Colors.black87;
+
     return Container(
       padding: EdgeInsets.all(16.w),
       decoration: BoxDecoration(
-        color: Colors.red[50],
+        color: bgColor,
         borderRadius: BorderRadius.circular(12.r),
         border: Border.all(color: Colors.red[200]!),
       ),
@@ -363,7 +389,7 @@ class AdherenceAnalysisScreen extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 16.sp,
                   fontWeight: FontWeight.w600,
-                  color: Colors.red[700],
+                  color: isDark ? Colors.red[300] : Colors.red[700],
                 ),
               ),
             ],
@@ -376,7 +402,7 @@ class AdherenceAnalysisScreen extends StatelessWidget {
                     Expanded(
                       child: Text(
                         med.medicationName,
-                        style: TextStyle(fontSize: 14.sp),
+                        style: TextStyle(fontSize: 14.sp, color: textColor),
                       ),
                     ),
                     if (med.missed > 0)
@@ -418,13 +444,18 @@ class AdherenceAnalysisScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildMedicationBreakdown(List<MedicationStats> medications) {
+  Widget _buildMedicationBreakdown(List<MedicationStats> medications, BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardBg = isDark ? const Color(0xFF1E293B) : Colors.white;
+    final borderColor = isDark ? Colors.grey[700] : Colors.grey[200];
+    final textColor = isDark ? Colors.white : AppColor.textPrimary;
+
     return Container(
       padding: EdgeInsets.all(16.w),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cardBg,
         borderRadius: BorderRadius.circular(12.r),
-        border: Border.all(color: Colors.grey[200]!),
+        border: Border.all(color: borderColor!),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -434,24 +465,28 @@ class AdherenceAnalysisScreen extends StatelessWidget {
             style: TextStyle(
               fontSize: 16.sp,
               fontWeight: FontWeight.w600,
-              color: AppColor.textPrimary,
+              color: textColor,
             ),
           ),
           SizedBox(height: 12.h),
-          ...medications.map((med) => _buildMedicationRow(med)),
+          ...medications.map((med) => _buildMedicationRow(med, context)),
         ],
       ),
     );
   }
 
-  Widget _buildMedicationRow(MedicationStats med) {
+  Widget _buildMedicationRow(MedicationStats med, BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final color = controller.getAdherenceColor(med.adherencePercentage);
+    final rowBg = isDark ? const Color(0xFF334155) : Colors.grey[50];
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final subtitleColor = isDark ? Colors.grey[400] : Colors.grey[600];
 
     return Container(
       margin: EdgeInsets.only(bottom: 12.h),
       padding: EdgeInsets.all(12.w),
       decoration: BoxDecoration(
-        color: Colors.grey[50],
+        color: rowBg,
         borderRadius: BorderRadius.circular(8.r),
       ),
       child: Column(
@@ -466,6 +501,7 @@ class AdherenceAnalysisScreen extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 14.sp,
                     fontWeight: FontWeight.w500,
+                    color: textColor,
                   ),
                 ),
               ),
@@ -489,24 +525,24 @@ class AdherenceAnalysisScreen extends StatelessWidget {
           SizedBox(height: 8.h),
           LinearProgressIndicator(
             value: med.adherencePercentage / 100,
-            backgroundColor: Colors.grey[200],
+            backgroundColor: isDark ? Colors.grey[700] : Colors.grey[200],
             valueColor: AlwaysStoppedAnimation<Color>(color),
           ),
           SizedBox(height: 8.h),
           Row(
             children: [
-              _buildSmallStat('Taken', med.taken, Colors.green),
+              _buildSmallStat('Taken', med.taken, Colors.green, subtitleColor),
               SizedBox(width: 12.w),
-              _buildSmallStat('Late', med.late, Colors.orange),
+              _buildSmallStat('Late', med.late, Colors.orange, subtitleColor),
               SizedBox(width: 12.w),
-              _buildSmallStat('Missed', med.missed, Colors.red),
+              _buildSmallStat('Missed', med.missed, Colors.red, subtitleColor),
               if (med.avgDelayMinutes > 0) ...[
                 Spacer(),
                 Text(
                   'Avg delay: ${controller.formatDuration(med.avgDelayMinutes.toInt())}',
                   style: TextStyle(
                     fontSize: 11.sp,
-                    color: Colors.grey[600],
+                    color: subtitleColor,
                   ),
                 ),
               ],
@@ -517,7 +553,7 @@ class AdherenceAnalysisScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildSmallStat(String label, int count, Color color) {
+  Widget _buildSmallStat(String label, int count, Color color, Color? subtitleColor) {
     return Row(
       children: [
         Container(
@@ -533,18 +569,23 @@ class AdherenceAnalysisScreen extends StatelessWidget {
           '$count $label',
           style: TextStyle(
             fontSize: 11.sp,
-            color: Colors.grey[600],
+            color: subtitleColor,
           ),
         ),
       ],
     );
   }
 
-  Widget _buildRelatedSymptoms(List<RelatedSymptom> symptoms) {
+  Widget _buildRelatedSymptoms(List<RelatedSymptom> symptoms, BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bgColor = isDark ? Colors.purple[900]!.withOpacity(0.3) : Colors.purple[50];
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final subtitleColor = isDark ? Colors.grey[400] : Colors.grey[600];
+
     return Container(
       padding: EdgeInsets.all(16.w),
       decoration: BoxDecoration(
-        color: Colors.purple[50],
+        color: bgColor,
         borderRadius: BorderRadius.circular(12.r),
         border: Border.all(color: Colors.purple[200]!),
       ),
@@ -560,7 +601,7 @@ class AdherenceAnalysisScreen extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 16.sp,
                   fontWeight: FontWeight.w600,
-                  color: Colors.purple[700],
+                  color: isDark ? Colors.purple[300] : Colors.purple[700],
                 ),
               ),
             ],
@@ -590,13 +631,14 @@ class AdherenceAnalysisScreen extends StatelessWidget {
                             style: TextStyle(
                               fontSize: 13.sp,
                               fontWeight: FontWeight.w500,
+                              color: textColor,
                             ),
                           ),
                           Text(
                             DateFormat('MMM d, h:mm a').format(symptom.reportedDateTime),
                             style: TextStyle(
                               fontSize: 11.sp,
-                              color: Colors.grey[600],
+                              color: subtitleColor,
                             ),
                           ),
                         ],
@@ -637,31 +679,34 @@ class AdherenceAnalysisScreen extends StatelessWidget {
     }
   }
 
-  Widget _buildHistoryTab() {
+  Widget _buildHistoryTab(BuildContext context) {
     return Obx(() {
       final response = controller.historyResponse.value;
 
       return response.when(
         loading: () => Center(child: CircularProgressIndicator()),
-        error: (error) => _buildErrorState(error),
-        success: (data) => _buildHistoryContent(data.events),
+        error: (error) => _buildErrorState(error, context),
+        success: (data) => _buildHistoryContent(data.events, context),
       );
     });
   }
 
-  Widget _buildHistoryContent(List<DoseEventDetail> events) {
+  Widget _buildHistoryContent(List<DoseEventDetail> events, BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final subtitleColor = isDark ? Colors.grey[400] : Colors.grey[600];
+
     if (events.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.history, size: 64.sp, color: Colors.grey[300]),
+            Icon(Icons.history, size: 64.sp, color: isDark ? Colors.grey[600] : Colors.grey[300]),
             SizedBox(height: 16.h),
             Text(
               'No medication history',
               style: TextStyle(
                 fontSize: 16.sp,
-                color: Colors.grey[600],
+                color: subtitleColor,
               ),
             ),
           ],
@@ -682,7 +727,7 @@ class AdherenceAnalysisScreen extends StatelessWidget {
     return ListView.builder(
       padding: EdgeInsets.all(16.w),
       itemCount: sortedDates.length,
-      itemBuilder: (context, index) {
+      itemBuilder: (ctx, index) {
         final dateKey = sortedDates[index];
         final dayEvents = groupedEvents[dateKey]!;
         final date = DateTime.parse(dateKey);
@@ -697,11 +742,11 @@ class AdherenceAnalysisScreen extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 14.sp,
                   fontWeight: FontWeight.w600,
-                  color: Colors.grey[600],
+                  color: subtitleColor,
                 ),
               ),
             ),
-            ...dayEvents.map((event) => _buildEventCard(event)),
+            ...dayEvents.map((event) => _buildEventCard(event, context)),
             SizedBox(height: 8.h),
           ],
         );
@@ -719,15 +764,19 @@ class AdherenceAnalysisScreen extends StatelessWidget {
     return DateFormat('EEEE, MMM d').format(date);
   }
 
-  Widget _buildEventCard(DoseEventDetail event) {
+  Widget _buildEventCard(DoseEventDetail event, BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final statusColor = controller.getStatusColor(event.status);
     final statusIcon = controller.getStatusIcon(event.status);
+    final cardBg = isDark ? const Color(0xFF1E293B) : Colors.white;
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final subtitleColor = isDark ? Colors.grey[400] : Colors.grey[600];
 
     return Container(
       margin: EdgeInsets.only(bottom: 8.h),
       padding: EdgeInsets.all(12.w),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cardBg,
         borderRadius: BorderRadius.circular(8.r),
         border: Border.all(color: statusColor.withOpacity(0.3)),
       ),
@@ -752,6 +801,7 @@ class AdherenceAnalysisScreen extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 14.sp,
                     fontWeight: FontWeight.w500,
+                    color: textColor,
                   ),
                 ),
                 if (event.strength.isNotEmpty)
@@ -759,19 +809,19 @@ class AdherenceAnalysisScreen extends StatelessWidget {
                     event.strength,
                     style: TextStyle(
                       fontSize: 12.sp,
-                      color: Colors.grey[600],
+                      color: subtitleColor,
                     ),
                   ),
                 SizedBox(height: 4.h),
                 Row(
                   children: [
-                    Icon(Icons.schedule, size: 12.sp, color: Colors.grey[500]),
+                    Icon(Icons.schedule, size: 12.sp, color: subtitleColor),
                     SizedBox(width: 4.w),
                     Text(
                       DateFormat('h:mm a').format(event.scheduledDateTime),
                       style: TextStyle(
                         fontSize: 11.sp,
-                        color: Colors.grey[600],
+                        color: subtitleColor,
                       ),
                     ),
                     if (event.takenAt != null) ...[
@@ -826,19 +876,23 @@ class AdherenceAnalysisScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildAIInsightsTab() {
+  Widget _buildAIInsightsTab(BuildContext context) {
     return Obx(() {
       final response = controller.aiInsightResponse.value;
 
       return response.when(
         loading: () => Center(child: CircularProgressIndicator()),
-        error: (error) => _buildAIErrorState(error),
-        success: (data) => _buildAIInsightsContent(data),
+        error: (error) => _buildAIErrorState(error, context),
+        success: (data) => _buildAIInsightsContent(data, context),
       );
     });
   }
 
-  Widget _buildAIErrorState(String error) {
+  Widget _buildAIErrorState(String error, BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final subtitleColor = isDark ? Colors.grey[400] : Colors.grey[600];
+
     return Center(
       child: Padding(
         padding: EdgeInsets.all(32.w),
@@ -852,6 +906,7 @@ class AdherenceAnalysisScreen extends StatelessWidget {
               style: TextStyle(
                 fontSize: 18.sp,
                 fontWeight: FontWeight.w600,
+                color: textColor,
               ),
             ),
             SizedBox(height: 8.h),
@@ -860,7 +915,7 @@ class AdherenceAnalysisScreen extends StatelessWidget {
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 14.sp,
-                color: Colors.grey[600],
+                color: subtitleColor,
               ),
             ),
             SizedBox(height: 24.h),
@@ -883,7 +938,7 @@ class AdherenceAnalysisScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildAIInsightsContent(AIAdherenceInsight data) {
+  Widget _buildAIInsightsContent(AIAdherenceInsight data, BuildContext context) {
     return SingleChildScrollView(
       padding: EdgeInsets.all(16.w),
       child: Column(
@@ -891,20 +946,20 @@ class AdherenceAnalysisScreen extends StatelessWidget {
         children: [
           _buildAIHeader(data),
           SizedBox(height: 16.h),
-          _buildOverallAssessment(data.overallAssessment),
+          _buildOverallAssessment(data.overallAssessment, context),
           SizedBox(height: 16.h),
-          ...data.sections.map((section) => _buildInsightSection(section)),
+          ...data.sections.map((section) => _buildInsightSection(section, context)),
           if (data.warnings.isNotEmpty) ...[
             SizedBox(height: 16.h),
-            _buildWarningsSection(data.warnings),
+            _buildWarningsSection(data.warnings, context),
           ],
           if (data.recommendations.isNotEmpty) ...[
             SizedBox(height: 16.h),
-            _buildRecommendationsSection(data.recommendations),
+            _buildRecommendationsSection(data.recommendations, context),
           ],
           if (data.parkinsonsSpecificNotes != null) ...[
             SizedBox(height: 16.h),
-            _buildParkinsonsNotes(data.parkinsonsSpecificNotes!),
+            _buildParkinsonsNotes(data.parkinsonsSpecificNotes!, context),
           ],
         ],
       ),
@@ -981,11 +1036,15 @@ class AdherenceAnalysisScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildOverallAssessment(String assessment) {
+  Widget _buildOverallAssessment(String assessment, BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bgColor = isDark ? Colors.blue[900]!.withOpacity(0.3) : Colors.blue[50];
+    final textColor = isDark ? Colors.white : Colors.grey[800];
+
     return Container(
       padding: EdgeInsets.all(16.w),
       decoration: BoxDecoration(
-        color: Colors.blue[50],
+        color: bgColor,
         borderRadius: BorderRadius.circular(12.r),
         border: Border.all(color: Colors.blue[200]!),
       ),
@@ -1001,7 +1060,7 @@ class AdherenceAnalysisScreen extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 16.sp,
                   fontWeight: FontWeight.w600,
-                  color: Colors.blue[700],
+                  color: isDark ? Colors.blue[300] : Colors.blue[700],
                 ),
               ),
             ],
@@ -1011,7 +1070,7 @@ class AdherenceAnalysisScreen extends StatelessWidget {
             assessment,
             style: TextStyle(
               fontSize: 14.sp,
-              color: Colors.grey[800],
+              color: textColor,
               height: 1.5,
             ),
           ),
@@ -1020,14 +1079,17 @@ class AdherenceAnalysisScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildInsightSection(InsightSection section) {
+  Widget _buildInsightSection(InsightSection section, BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final severityColor = _getSeverityColorForSection(section.severity);
+    final textColor = isDark ? Colors.white : Colors.grey[800];
+    final subtitleColor = isDark ? Colors.grey[400] : Colors.grey[700];
 
     return Container(
       margin: EdgeInsets.only(bottom: 12.h),
       padding: EdgeInsets.all(16.w),
       decoration: BoxDecoration(
-        color: severityColor.withOpacity(0.05),
+        color: severityColor.withOpacity(isDark ? 0.15 : 0.05),
         borderRadius: BorderRadius.circular(12.r),
         border: Border.all(color: severityColor.withOpacity(0.2)),
       ),
@@ -1050,7 +1112,7 @@ class AdherenceAnalysisScreen extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 15.sp,
                   fontWeight: FontWeight.w600,
-                  color: Colors.grey[800],
+                  color: textColor,
                 ),
               ),
             ],
@@ -1060,7 +1122,7 @@ class AdherenceAnalysisScreen extends StatelessWidget {
             section.content,
             style: TextStyle(
               fontSize: 13.sp,
-              color: Colors.grey[700],
+              color: subtitleColor,
               height: 1.5,
             ),
           ),
@@ -1077,7 +1139,7 @@ class AdherenceAnalysisScreen extends StatelessWidget {
                           point,
                           style: TextStyle(
                             fontSize: 12.sp,
-                            color: Colors.grey[600],
+                            color: isDark ? Colors.grey[400] : Colors.grey[600],
                           ),
                         ),
                       ),
@@ -1102,11 +1164,15 @@ class AdherenceAnalysisScreen extends StatelessWidget {
     }
   }
 
-  Widget _buildWarningsSection(List<String> warnings) {
+  Widget _buildWarningsSection(List<String> warnings, BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bgColor = isDark ? Colors.red[900]!.withOpacity(0.3) : Colors.red[50];
+    final textColor = isDark ? Colors.white : Colors.grey[800];
+
     return Container(
       padding: EdgeInsets.all(16.w),
       decoration: BoxDecoration(
-        color: Colors.red[50],
+        color: bgColor,
         borderRadius: BorderRadius.circular(12.r),
         border: Border.all(color: Colors.red[200]!),
       ),
@@ -1122,7 +1188,7 @@ class AdherenceAnalysisScreen extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 16.sp,
                   fontWeight: FontWeight.w600,
-                  color: Colors.red[700],
+                  color: isDark ? Colors.red[300] : Colors.red[700],
                 ),
               ),
             ],
@@ -1140,7 +1206,7 @@ class AdherenceAnalysisScreen extends StatelessWidget {
                         warning,
                         style: TextStyle(
                           fontSize: 13.sp,
-                          color: Colors.grey[800],
+                          color: textColor,
                         ),
                       ),
                     ),
@@ -1152,11 +1218,15 @@ class AdherenceAnalysisScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildRecommendationsSection(List<String> recommendations) {
+  Widget _buildRecommendationsSection(List<String> recommendations, BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bgColor = isDark ? Colors.green[900]!.withOpacity(0.3) : Colors.green[50];
+    final textColor = isDark ? Colors.white : Colors.grey[800];
+
     return Container(
       padding: EdgeInsets.all(16.w),
       decoration: BoxDecoration(
-        color: Colors.green[50],
+        color: bgColor,
         borderRadius: BorderRadius.circular(12.r),
         border: Border.all(color: Colors.green[200]!),
       ),
@@ -1172,7 +1242,7 @@ class AdherenceAnalysisScreen extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 16.sp,
                   fontWeight: FontWeight.w600,
-                  color: Colors.green[700],
+                  color: isDark ? Colors.green[300] : Colors.green[700],
                 ),
               ),
             ],
@@ -1207,7 +1277,7 @@ class AdherenceAnalysisScreen extends StatelessWidget {
                         entry.value,
                         style: TextStyle(
                           fontSize: 13.sp,
-                          color: Colors.grey[800],
+                          color: textColor,
                         ),
                       ),
                     ),
@@ -1219,12 +1289,17 @@ class AdherenceAnalysisScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildParkinsonsNotes(String notes) {
+  Widget _buildParkinsonsNotes(String notes, BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textColor = isDark ? Colors.white : Colors.grey[800];
+
     return Container(
       padding: EdgeInsets.all(16.w),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [Colors.purple[50]!, Colors.indigo[50]!],
+          colors: isDark
+              ? [Colors.purple[900]!.withOpacity(0.4), Colors.indigo[900]!.withOpacity(0.4)]
+              : [Colors.purple[50]!, Colors.indigo[50]!],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -1243,7 +1318,7 @@ class AdherenceAnalysisScreen extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 16.sp,
                   fontWeight: FontWeight.w600,
-                  color: Colors.purple[700],
+                  color: isDark ? Colors.purple[300] : Colors.purple[700],
                 ),
               ),
             ],
@@ -1253,7 +1328,7 @@ class AdherenceAnalysisScreen extends StatelessWidget {
             notes,
             style: TextStyle(
               fontSize: 13.sp,
-              color: Colors.grey[800],
+              color: textColor,
               height: 1.5,
             ),
           ),
@@ -1262,7 +1337,10 @@ class AdherenceAnalysisScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildErrorState(String error) {
+  Widget _buildErrorState(String error, BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final subtitleColor = isDark ? Colors.grey[400] : Colors.grey[600];
+
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -1273,7 +1351,7 @@ class AdherenceAnalysisScreen extends StatelessWidget {
             'Failed to load data',
             style: TextStyle(
               fontSize: 16.sp,
-              color: Colors.grey[600],
+              color: subtitleColor,
             ),
           ),
           SizedBox(height: 8.h),

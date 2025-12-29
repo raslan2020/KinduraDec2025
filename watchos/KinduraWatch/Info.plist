@@ -20,27 +20,49 @@
 	<string>1.0</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<false/>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+		<key>NSExceptionDomains</key>
+		<dict>
+			<key>127.0.0.1</key>
+			<dict>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
+			</dict>
+			<key>65.109.75.25</key>
+			<dict>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
+				<key>NSIncludesSubdomains</key>
+				<true/>
+			</dict>
+			<key>192.168.100.236</key>
+			<dict>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
+			</dict>
+		</dict>
+	</dict>
 	<key>NSHealthShareUsageDescription</key>
 	<string>Kindura needs access to your health data to monitor vitals, track sleep, and detect falls for your safety.</string>
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>Kindura needs to update your health data to record monitoring events.</string>
 	<key>UIBackgroundModes</key>
 	<array>
-		<string>workout-processing</string>
 		<string>health-sharing</string>
+		<string>workout-processing</string>
 	</array>
 	<key>WKApplication</key>
 	<true/>
+	<key>WKBackgroundModes</key>
+	<array/>
 	<key>WKCompanionAppBundleIdentifier</key>
 	<string>com.kindura.ai</string>
 	<key>WKRunsIndependentlyOfCompanionApp</key>
 	<true/>
-	<key>NSAppTransportSecurity</key>
-	<dict>
-		<key>NSAllowsArbitraryLoads</key>
-		<true/>
-		<key>NSAllowsLocalNetworking</key>
-		<true/>
-	</dict>
 </dict>
 </plist>

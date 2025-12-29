@@ -1,3 +1,42 @@
+"""
+=============================================================================
+KINDURA AI - MEDICINE MODELS
+=============================================================================
+Medication tracking and adherence monitoring models.
+
+Models in this file:
+- Medicine: Core medication information (drug, dosage, schedule)
+- MedicationEvent: Dose events (taken, missed, skipped)
+- MedicationAdherenceDaily: Daily adherence summary for reporting
+- MedicationInteraction: Drug interaction tracking
+- MedicationReminder: Reminder settings
+
+Key Concepts:
+- Each Medicine can have multiple MedicationEvents
+- MedicationEvent status: scheduled → taken/late/missed/skipped
+- schedule JSON format: {"times": ["08:00", "20:00"], "days": ["Mon", ...]}
+
+Flutter Mapping:
+- Medicine → lib/models/medication/medication_models.dart::Medication
+- MedicationEvent → lib/models/medication/medication_models.dart::DoseEvent
+- API handled by lib/repository/medication_repository/
+
+Voice Agent Integration:
+- Agent reads medication list from /api/medicines/
+- Agent does NOT update medications (restricted for safety)
+- User must update via app UI
+
+API Endpoints:
+- GET /api/medicines/ → List user's medications
+- POST /api/medicines/ → Create medication
+- GET /api/dose-events/ → List dose events
+- POST /api/dose-events/ → Record dose (taken/missed)
+- GET /api/dose-events/today/ → Today's doses
+
+@see /docs/DEVELOPER_GUIDE.md for full documentation
+=============================================================================
+"""
+
 from django.db import models
 from django.core.validators import MinValueValidator
 from users.models import User

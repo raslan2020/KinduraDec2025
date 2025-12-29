@@ -65,35 +65,101 @@ class NullableStringOrIntConverter implements JsonConverter<String?, Object?> {
   Object? toJson(String? object) => object;
 }
 
-// Main medication model
+// =============================================================================
+// MEDICATION MODEL
+// =============================================================================
+// Core model representing a patient's medication.
+// Maps to Django model: KinduraAPIs-0.0.1/medicines/models.py::Medicine
+
+/// Represents a patient's medication with all tracking details.
+///
+/// Key features:
+/// - Stores drug info (name, strength, form, route)
+/// - Contains schedule configuration via [MedicationSchedule]
+/// - Tracks missed dose policies for voice agent guidance
+/// - Supports both prescription and OTC medications
+///
+/// Example usage:
+/// ```dart
+/// final medication = Medication.fromJson(apiResponse['result']);
+/// print(medication.fullDescription); // "Metformin 500 mg (tablet)"
+/// ```
 @JsonSerializable()
 class Medication {
+  /// Unique identifier (from database)
   @StringOrIntConverter()
   final String id;
+
+  /// Associated health profile ID (for multi-profile support)
   @NullableStringOrIntConverter()
   final String? profileId;
+
+  /// Generic drug name (e.g., "Metformin", "Lisinopril")
   final String drugName;
+
+  /// Brand name if available (e.g., "Glucophage")
   final String? brandName;
-  final String form; // tablet, capsule, liquid, injection, etc.
+
+  /// Dosage form: tablet, capsule, liquid, injection, patch, inhaler, cream, drops
+  final String form;
+
+  /// Strength value (e.g., 500 for "500 mg")
   final double strength;
-  final String strengthUnit; // mg, ml, units, etc.
-  final String route; // oral, injection, topical, etc.
+
+  /// Strength unit: mg, mcg, g, ml, units, percentage
+  final String strengthUnit;
+
+  /// Administration route: oral, sublingual, injection, topical, inhalation, etc.
+  final String route;
+
+  /// Detailed instructions for taking the medication
   final String instructionsText;
+
+  /// Food requirement: true=with food, false=empty stomach, null=doesn't matter
   final bool? takeWithFood;
+
+  /// PRN (as needed) medication flag
   final bool asNeeded;
+
+  /// Policy when dose is missed - used by voice agent for guidance
+  /// Values: skip_dose, take_asap, take_and_shift, contact_doctor, no_policy
   @JsonKey(defaultValue: 'no_policy')
-  final String missedDoseAction; // skip_dose, take_asap, take_and_shift, contact_doctor, no_policy
+  final String missedDoseAction;
+
+  /// Schedule configuration (times, days, frequency)
   final MedicationSchedule schedule;
+
+  /// When medication regimen starts
   final DateTime? startDate;
+
+  /// When medication regimen ends (null = indefinite)
   final DateTime? endDate;
+
+  /// Prescribing physician name
   final String? prescribedBy;
+
+  /// Pharmacy name for refills
   final String? pharmacy;
+
+  /// Prescription/RX number
   final String? rxNumber;
+
+  /// Remaining refills count
   final int? refillsRemaining;
+
+  /// Additional notes
   final String? notes;
+
+  /// Active status - false means discontinued
   final bool isActive;
+
+  /// Record creation timestamp
   final DateTime createdAt;
+
+  /// Last update timestamp
   final DateTime updatedAt;
+
+  /// Who created the record (patient, caregiver, doctor)
   final String? createdBy;
 
   const Medication({
@@ -248,25 +314,78 @@ enum MedicationFrequency {
   asNeeded
 }
 
-// Dose event tracking
+// =============================================================================
+// DOSE EVENT MODEL
+// =============================================================================
+// Tracks individual dose events (taken, missed, skipped, etc.)
+// Maps to Django model: KinduraAPIs-0.0.1/medicines/models.py::MedicationEvent
+//
+// IMPORTANT: When comparing status, ALWAYS use enum values, not strings:
+//   CORRECT:   event.status == DoseStatus.taken
+//   INCORRECT: event.status == 'taken'  // This will ALWAYS be false!
+
+/// Represents a single dose event for medication tracking.
+///
+/// Each scheduled dose creates a DoseEvent. The status is updated when:
+/// - Patient marks dose as taken (via app or voice)
+/// - System marks dose as missed (when time passes)
+/// - Patient skips or snoozes the dose
+///
+/// Example usage:
+/// ```dart
+/// // Check if dose was taken (CORRECT way)
+/// if (event.status == DoseStatus.taken || event.status == DoseStatus.late) {
+///   print("Dose was taken");
+/// }
+///
+/// // WRONG - don't compare with strings!
+/// if (event.status == 'taken') { } // Always false!
+/// ```
 @JsonSerializable()
 class DoseEvent {
+  /// Unique identifier
   @StringOrIntConverter()
   final String id;
+
+  /// Reference to the medication this dose is for
   @StringOrIntConverter()
   final String medicationId;
+
+  /// Associated health profile
   @NullableStringOrIntConverter()
   final String? profileId;
+
+  /// When the dose was scheduled to be taken
   final DateTime scheduledAt;
+
+  /// When the dose was actually taken (null if not taken)
   final DateTime? takenAt;
+
+  /// Current status of this dose - COMPARE WITH ENUM VALUES, NOT STRINGS!
   final DoseStatus status;
+
+  /// Minutes late if taken after scheduled time
   final int? delayMinutes;
+
+  /// Any side effects reported with this dose
   final String? sideEffectNote;
+
+  /// Additional notes
   final String? notes;
-  final double? actualDose; // if different from prescribed
+
+  /// Actual dose taken if different from prescribed
+  final double? actualDose;
+
+  /// Unit for actual dose
   final String? actualUnit;
-  final String? method; // tap, voice, caregiver, etc.
+
+  /// How the dose was recorded: tap, voice, caregiver, auto
+  final String? method;
+
+  /// When this record was created
   final DateTime createdAt;
+
+  /// When this record was last updated
   final DateTime? updatedAt;
 
   const DoseEvent({
@@ -298,17 +417,48 @@ class DoseEvent {
   Map<String, dynamic> toJson() => _$DoseEventToJson(this);
 }
 
+// =============================================================================
+// DOSE STATUS ENUM
+// =============================================================================
+// CRITICAL: Always compare using enum values, never strings!
+//
+// CORRECT:   if (event.status == DoseStatus.taken) { ... }
+// INCORRECT: if (event.status == 'taken') { ... }  // NEVER WORKS!
+//
+// The @JsonValue annotation maps API string values to enum values.
+// json_annotation handles the conversion automatically.
+
+/// Status of a medication dose.
+///
+/// Lifecycle:
+/// 1. scheduled → Initial state when dose is created
+/// 2. snoozed → Patient postponed the reminder
+/// 3. taken → Patient confirmed taking the dose on time
+/// 4. late → Patient took the dose but after the grace period
+/// 5. missed → Time passed and dose was never taken
+/// 6. skipped → Patient intentionally skipped (with reason)
 enum DoseStatus {
+  /// Dose is scheduled but not yet due or confirmed
   @JsonValue('scheduled')
   scheduled,
+
+  /// Dose was taken within the grace period (±15 minutes)
   @JsonValue('taken')
   taken,
+
+  /// Dose was taken but after the grace period
   @JsonValue('late')
   late,
+
+  /// Dose was not taken and grace period expired
   @JsonValue('missed')
   missed,
+
+  /// Patient intentionally skipped this dose
   @JsonValue('skipped')
   skipped,
+
+  /// Patient snoozed the reminder (will be asked again)
   @JsonValue('snoozed')
   snoozed
 }

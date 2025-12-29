@@ -14,9 +14,16 @@ class CategoryTabs extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final containerBg = isDark ? const Color(0xFF0F172A) : Colors.grey.shade50;
+    final chipBg = isDark ? const Color(0xFF1E293B) : Colors.white;
+    final chipBorder = isDark ? Colors.grey.shade700 : Colors.grey.shade300;
+    final textColor = isDark ? Colors.grey.shade300 : Colors.grey.shade700;
+    final subtextColor = isDark ? Colors.grey.shade400 : Colors.grey.shade600;
+
     return Container(
       height: 100,
-      color: Colors.grey.shade50,
+      color: containerBg,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -33,15 +40,17 @@ class CategoryTabs extends StatelessWidget {
                     label: Text('Latest'),
                     selected: controller.showLatestFirst.value,
                     onSelected: (_) => controller.toggleLatestFilter(),
-                    selectedColor: Colors.blue.shade100,
+                    selectedColor: isDark ? Colors.blue.shade900 : Colors.blue.shade100,
+                    backgroundColor: chipBg,
                     checkmarkColor: Colors.blue.shade700,
                     materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     visualDensity: VisualDensity.compact,
+                    side: BorderSide(color: controller.showLatestFirst.value ? Colors.blue : chipBorder),
                     labelStyle: TextStyle(
                       fontSize: 12,
                       color: controller.showLatestFirst.value
                           ? Colors.blue.shade700
-                          : Colors.grey.shade600,
+                          : textColor,
                     ),
                   ),
 
@@ -52,15 +61,17 @@ class CategoryTabs extends StatelessWidget {
                     label: Text('Abnormal'),
                     selected: controller.showOnlyAbnormal.value,
                     onSelected: (_) => controller.toggleAbnormalFilter(),
-                    selectedColor: Colors.orange.shade100,
+                    selectedColor: isDark ? Colors.orange.shade900 : Colors.orange.shade100,
+                    backgroundColor: chipBg,
                     checkmarkColor: Colors.orange.shade700,
                     materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     visualDensity: VisualDensity.compact,
+                    side: BorderSide(color: controller.showOnlyAbnormal.value ? Colors.orange : chipBorder),
                     labelStyle: TextStyle(
                       fontSize: 12,
                       color: controller.showOnlyAbnormal.value
                           ? Colors.orange.shade700
-                          : Colors.grey.shade600,
+                          : textColor,
                     ),
                   ),
 
@@ -71,15 +82,17 @@ class CategoryTabs extends StatelessWidget {
                     label: Text('Due for Repeat'),
                     selected: controller.showDueForRepetition.value,
                     onSelected: (_) => controller.toggleDueForRepetitionFilter(),
-                    selectedColor: Colors.purple.shade100,
+                    selectedColor: isDark ? Colors.purple.shade900 : Colors.purple.shade100,
+                    backgroundColor: chipBg,
                     checkmarkColor: Colors.purple.shade700,
                     materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     visualDensity: VisualDensity.compact,
+                    side: BorderSide(color: controller.showDueForRepetition.value ? Colors.purple : chipBorder),
                     labelStyle: TextStyle(
                       fontSize: 12,
                       color: controller.showDueForRepetition.value
                           ? Colors.purple.shade700
-                          : Colors.grey.shade600,
+                          : textColor,
                     ),
                   ),
 
@@ -89,7 +102,7 @@ class CategoryTabs extends StatelessWidget {
                   Container(
                     padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
-                      color: Colors.grey.shade200,
+                      color: isDark ? const Color(0xFF1E293B) : Colors.grey.shade200,
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
@@ -97,7 +110,7 @@ class CategoryTabs extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w500,
-                        color: Colors.grey.shade700,
+                        color: textColor,
                       ),
                     ),
                   ),
@@ -129,10 +142,10 @@ class CategoryTabs extends StatelessWidget {
                       child: Container(
                         padding: EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                         decoration: BoxDecoration(
-                          color: isSelected ? Colors.blue : Colors.white,
+                          color: isSelected ? Colors.blue : chipBg,
                           borderRadius: BorderRadius.circular(20),
                           border: Border.all(
-                            color: isSelected ? Colors.blue : Colors.grey.shade300,
+                            color: isSelected ? Colors.blue : chipBorder,
                           ),
                         ),
                         child: Row(
@@ -143,7 +156,7 @@ class CategoryTabs extends StatelessWidget {
                               style: TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w500,
-                                color: isSelected ? Colors.white : Colors.grey.shade700,
+                                color: isSelected ? Colors.white : textColor,
                               ),
                             ),
 
@@ -154,7 +167,7 @@ class CategoryTabs extends StatelessWidget {
                                 decoration: BoxDecoration(
                                   color: isSelected
                                       ? Colors.white.withOpacity(0.3)
-                                      : Colors.grey.shade200,
+                                      : (isDark ? Colors.grey.shade800 : Colors.grey.shade200),
                                   borderRadius: BorderRadius.circular(10),
                                 ),
                                 child: Text(
@@ -162,7 +175,7 @@ class CategoryTabs extends StatelessWidget {
                                   style: TextStyle(
                                     fontSize: 10,
                                     fontWeight: FontWeight.bold,
-                                    color: isSelected ? Colors.white : Colors.grey.shade600,
+                                    color: isSelected ? Colors.white : subtextColor,
                                   ),
                                 ),
                               ),

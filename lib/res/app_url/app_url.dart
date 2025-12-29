@@ -3,8 +3,9 @@ class AppUrl {
   static const bool isLocalEnvironment = true; // Change to false for production
 
   // Base URLs for different environments
-  // Note: 127.0.0.1 works for iOS Simulator on same machine
-  static const String localBaseUrl = "http://127.0.0.1:8000/api";
+  // Note: Use your Mac's local IP for physical device testing
+  // To find IP: run `ipconfig getifaddr en0` in terminal
+  static const String localBaseUrl = "http://10.120.22.163:8000/api";
   static const String productionBaseUrl = "http://65.109.75.25:8000/api";
 
   // Dynamic base URL based on environment

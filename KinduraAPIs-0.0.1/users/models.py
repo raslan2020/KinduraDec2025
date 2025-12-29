@@ -1,3 +1,37 @@
+"""
+=============================================================================
+KINDURA AI - USER MODELS
+=============================================================================
+Core user and health-related data models for the Kindura AI application.
+
+Models in this file:
+- User: Custom user model with health-specific fields
+- UserToken: Authentication tokens with expiration
+- UserJSON: Uploaded JSON data storage
+- PasswordResetToken: Password reset OTP tokens
+- PatientReport: AI-generated health reports (daily/weekly/monthly)
+- Contact: Emergency contacts and caregivers
+- PatientObservation: Health observations from voice conversations
+
+Database:
+- PostgreSQL with Django ORM
+- Run `python manage.py migrate` after changes
+
+Flutter Mapping:
+- User → lib/models/user_profile/user_profile_model.dart
+- PatientReport → lib/screens/kindura_reports/
+- Contact → lib/models/contact/contact_model.dart
+
+API Endpoints:
+- /api/users/profile/ → User profile
+- /api/users/patient-reports/ → Patient reports
+- /api/users/observations/ → Health observations
+- /api/users/contacts/ → Emergency contacts
+
+@see /docs/DEVELOPER_GUIDE.md for full documentation
+=============================================================================
+"""
+
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.core.validators import EmailValidator

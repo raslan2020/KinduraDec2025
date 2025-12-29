@@ -17,6 +17,11 @@ class AddMedicationScreen extends GetView<MedicationController> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final backgroundColor = isDark ? const Color(0xFF0F172A) : Colors.grey[50];
+    final appBarColor = isDark ? const Color(0xFF1E293B) : Colors.white;
+    final textColor = isDark ? Colors.white : Colors.black87;
+
     // Initialize form when editing
     if (isEditing && medication != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -28,10 +33,10 @@ class AddMedicationScreen extends GetView<MedicationController> {
       });
     }
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: backgroundColor,
       appBar: AppBar(
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: Colors.black87),
+          icon: Icon(Icons.arrow_back, color: textColor),
           onPressed: () => Get.back(),
         ),
         title: Text(
@@ -39,37 +44,41 @@ class AddMedicationScreen extends GetView<MedicationController> {
           style: TextStyle(
             fontSize: 18.sp,
             fontWeight: FontWeight.w600,
-            color: Colors.black87,
+            color: textColor,
           ),
         ),
-        backgroundColor: Colors.white,
-        elevation: 1,
+        backgroundColor: appBarColor,
+        elevation: isDark ? 0 : 1,
         centerTitle: true,
       ),
       body: SingleChildScrollView(
         padding: EdgeInsets.all(16.w),
         child: Column(
           children: [
-            _buildMedicationInfoSection(),
+            _buildMedicationInfoSection(context),
             SizedBox(height: 20.h),
-            _buildScheduleSection(),
+            _buildScheduleSection(context),
             SizedBox(height: 20.h),
-            _buildReminderSection(),
+            _buildReminderSection(context),
             SizedBox(height: 32.h),
-            _buildSaveButton(),
+            _buildSaveButton(context),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildMedicationInfoSection() {
+  Widget _buildMedicationInfoSection(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardBg = isDark ? const Color(0xFF1E293B) : Colors.white;
+    final textColor = isDark ? Colors.white : Colors.black87;
+
     return Container(
       padding: EdgeInsets.all(16.w),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cardBg,
         borderRadius: BorderRadius.circular(12.r),
-        boxShadow: [
+        boxShadow: isDark ? null : [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 4,
@@ -85,7 +94,7 @@ class AddMedicationScreen extends GetView<MedicationController> {
             style: TextStyle(
               fontSize: 16.sp,
               fontWeight: FontWeight.w600,
-              color: Colors.black87,
+              color: textColor,
             ),
           ),
           SizedBox(height: 16.h),
@@ -115,6 +124,7 @@ class AddMedicationScreen extends GetView<MedicationController> {
               SizedBox(width: 12.w),
               Expanded(
                 child: Obx(() => _buildDropdown(
+                  context: context,
                   value: controller.strengthUnit.value,
                   items: ['mg', 'ml', 'units', 'mcg', 'g'],
                   onChanged: (value) => controller.strengthUnit.value = value!,
@@ -125,6 +135,7 @@ class AddMedicationScreen extends GetView<MedicationController> {
           ),
           SizedBox(height: 12.h),
           Obx(() => _buildDropdown(
+            context: context,
             value: controller.medicationForm.value,
             items: ['tablet', 'capsule', 'liquid', 'injection', 'inhaler', 'cream', 'ointment'],
             onChanged: (value) => controller.medicationForm.value = value!,
@@ -132,6 +143,7 @@ class AddMedicationScreen extends GetView<MedicationController> {
           )),
           SizedBox(height: 12.h),
           Obx(() => _buildDropdown(
+            context: context,
             value: controller.medicationRoute.value,
             items: ['oral', 'injection', 'topical', 'inhalation', 'sublingual'],
             onChanged: (value) => controller.medicationRoute.value = value!,
@@ -145,13 +157,16 @@ class AddMedicationScreen extends GetView<MedicationController> {
             maxLines: 2,
           ),
           SizedBox(height: 12.h),
-          _buildFoodPreferenceSection(),
+          _buildFoodPreferenceSection(context),
         ],
       ),
     );
   }
 
-  Widget _buildFoodPreferenceSection() {
+  Widget _buildFoodPreferenceSection(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textColor = isDark ? Colors.white : Colors.black87;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -160,28 +175,28 @@ class AddMedicationScreen extends GetView<MedicationController> {
           style: TextStyle(
             fontSize: 14.sp,
             fontWeight: FontWeight.w500,
-            color: Colors.black87,
+            color: textColor,
           ),
         ),
         SizedBox(height: 8.h),
         Obx(() => Column(
           children: [
             RadioListTile<bool?>(
-              title: Text('No specific requirement', style: TextStyle(fontSize: 14.sp)),
+              title: Text('No specific requirement', style: TextStyle(fontSize: 14.sp, color: textColor)),
               value: null,
               groupValue: controller.takeWithFood.value,
               onChanged: (value) => controller.takeWithFood.value = value,
               contentPadding: EdgeInsets.zero,
             ),
             RadioListTile<bool?>(
-              title: Text('Take with food', style: TextStyle(fontSize: 14.sp)),
+              title: Text('Take with food', style: TextStyle(fontSize: 14.sp, color: textColor)),
               value: true,
               groupValue: controller.takeWithFood.value,
               onChanged: (value) => controller.takeWithFood.value = value,
               contentPadding: EdgeInsets.zero,
             ),
             RadioListTile<bool?>(
-              title: Text('Take on empty stomach', style: TextStyle(fontSize: 14.sp)),
+              title: Text('Take on empty stomach', style: TextStyle(fontSize: 14.sp, color: textColor)),
               value: false,
               groupValue: controller.takeWithFood.value,
               onChanged: (value) => controller.takeWithFood.value = value,
@@ -193,13 +208,18 @@ class AddMedicationScreen extends GetView<MedicationController> {
     );
   }
 
-  Widget _buildScheduleSection() {
+  Widget _buildScheduleSection(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardBg = isDark ? const Color(0xFF1E293B) : Colors.white;
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final subtitleColor = isDark ? Colors.grey[400] : Colors.grey[600];
+
     return Container(
       padding: EdgeInsets.all(16.w),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cardBg,
         borderRadius: BorderRadius.circular(12.r),
-        boxShadow: [
+        boxShadow: isDark ? null : [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 4,
@@ -215,13 +235,13 @@ class AddMedicationScreen extends GetView<MedicationController> {
             style: TextStyle(
               fontSize: 16.sp,
               fontWeight: FontWeight.w600,
-              color: Colors.black87,
+              color: textColor,
             ),
           ),
           SizedBox(height: 16.h),
           Obx(() => CheckboxListTile(
-            title: Text('As needed (PRN)', style: TextStyle(fontSize: 14.sp)),
-            subtitle: Text('Take only when needed, not on a schedule', style: TextStyle(fontSize: 12.sp)),
+            title: Text('As needed (PRN)', style: TextStyle(fontSize: 14.sp, color: textColor)),
+            subtitle: Text('Take only when needed, not on a schedule', style: TextStyle(fontSize: 12.sp, color: subtitleColor)),
             value: controller.asNeeded.value,
             onChanged: (value) => controller.asNeeded.value = value!,
             contentPadding: EdgeInsets.zero,
@@ -233,11 +253,11 @@ class AddMedicationScreen extends GetView<MedicationController> {
             return Column(
               children: [
                 SizedBox(height: 16.h),
-                _buildTimesList(),
+                _buildTimesList(context),
                 SizedBox(height: 16.h),
-                _buildDaysSelection(),
+                _buildDaysSelection(context),
                 SizedBox(height: 16.h),
-                _buildMissedDosePolicySection(),
+                _buildMissedDosePolicySection(context),
               ],
             );
           }),
@@ -246,7 +266,11 @@ class AddMedicationScreen extends GetView<MedicationController> {
     );
   }
 
-  Widget _buildMissedDosePolicySection() {
+  Widget _buildMissedDosePolicySection(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final subtitleColor = isDark ? Colors.grey[400] : Colors.grey[600];
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -255,11 +279,12 @@ class AddMedicationScreen extends GetView<MedicationController> {
           style: TextStyle(
             fontSize: 14.sp,
             fontWeight: FontWeight.w500,
-            color: Colors.black87,
+            color: textColor,
           ),
         ),
         SizedBox(height: 8.h),
         Obx(() => _buildMissedDoseDropdown(
+          context: context,
           value: controller.missedDoseAction.value,
           onChanged: (value) => controller.missedDoseAction.value = value!,
         )),
@@ -268,7 +293,7 @@ class AddMedicationScreen extends GetView<MedicationController> {
           _getMissedDoseDescription(controller.missedDoseAction.value),
           style: TextStyle(
             fontSize: 12.sp,
-            color: Colors.grey[600],
+            color: subtitleColor,
             fontStyle: FontStyle.italic,
           ),
         ),
@@ -277,9 +302,15 @@ class AddMedicationScreen extends GetView<MedicationController> {
   }
 
   Widget _buildMissedDoseDropdown({
+    required BuildContext context,
     required String value,
     required ValueChanged<String?> onChanged,
   }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final borderColor = isDark ? Colors.grey[600]! : Colors.grey[300]!;
+    final fillColor = isDark ? const Color(0xFF0F172A) : Colors.white;
+
     final items = {
       'no_policy': 'No specific policy',
       'skip_dose': 'Skip and wait for next dose',
@@ -290,14 +321,18 @@ class AddMedicationScreen extends GetView<MedicationController> {
 
     return DropdownButtonFormField<String>(
       value: value.isEmpty ? 'no_policy' : value,
+      dropdownColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+      style: TextStyle(fontSize: 14.sp, color: textColor),
       decoration: InputDecoration(
+        filled: true,
+        fillColor: fillColor,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8.r),
-          borderSide: BorderSide(color: Colors.grey[300]!),
+          borderSide: BorderSide(color: borderColor),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8.r),
-          borderSide: BorderSide(color: Colors.grey[300]!),
+          borderSide: BorderSide(color: borderColor),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8.r),
@@ -308,7 +343,7 @@ class AddMedicationScreen extends GetView<MedicationController> {
       items: items.entries.map((entry) {
         return DropdownMenuItem<String>(
           value: entry.key,
-          child: Text(entry.value, style: TextStyle(fontSize: 14.sp)),
+          child: Text(entry.value, style: TextStyle(fontSize: 14.sp, color: textColor)),
         );
       }).toList(),
       onChanged: onChanged,
@@ -330,7 +365,14 @@ class AddMedicationScreen extends GetView<MedicationController> {
     }
   }
 
-  Widget _buildTimesList() {
+  Widget _buildTimesList(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final subtitleColor = isDark ? Colors.grey[400] : Colors.grey[600];
+    final unselectedBg = isDark ? const Color(0xFF0F172A) : Colors.grey[100];
+    final borderColor = isDark ? Colors.grey[600]! : Colors.grey[300]!;
+    final timeBg = isDark ? const Color(0xFF0F172A) : Colors.grey[50];
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -340,7 +382,7 @@ class AddMedicationScreen extends GetView<MedicationController> {
           style: TextStyle(
             fontSize: 14.sp,
             fontWeight: FontWeight.w500,
-            color: Colors.black87,
+            color: textColor,
           ),
         ),
         SizedBox(height: 8.h),
@@ -354,10 +396,10 @@ class AddMedicationScreen extends GetView<MedicationController> {
                   margin: EdgeInsets.only(right: count < 4 ? 8.w : 0),
                   padding: EdgeInsets.symmetric(vertical: 12.h),
                   decoration: BoxDecoration(
-                    color: isSelected ? Colors.blue : Colors.grey[100],
+                    color: isSelected ? Colors.blue : unselectedBg,
                     borderRadius: BorderRadius.circular(8.r),
                     border: Border.all(
-                      color: isSelected ? Colors.blue : Colors.grey[300]!,
+                      color: isSelected ? Colors.blue : borderColor,
                     ),
                   ),
                   child: Center(
@@ -366,7 +408,7 @@ class AddMedicationScreen extends GetView<MedicationController> {
                       style: TextStyle(
                         fontSize: 14.sp,
                         fontWeight: FontWeight.w600,
-                        color: isSelected ? Colors.white : Colors.black87,
+                        color: isSelected ? Colors.white : textColor,
                       ),
                     ),
                   ),
@@ -380,7 +422,7 @@ class AddMedicationScreen extends GetView<MedicationController> {
           _getDoseFrequencyHint(controller.dosesPerDay.value),
           style: TextStyle(
             fontSize: 12.sp,
-            color: Colors.grey[600],
+            color: subtitleColor,
             fontStyle: FontStyle.italic,
           ),
         )),
@@ -395,7 +437,7 @@ class AddMedicationScreen extends GetView<MedicationController> {
               style: TextStyle(
                 fontSize: 14.sp,
                 fontWeight: FontWeight.w500,
-                color: Colors.black87,
+                color: textColor,
               ),
             ),
             TextButton.icon(
@@ -418,9 +460,9 @@ class AddMedicationScreen extends GetView<MedicationController> {
                 margin: EdgeInsets.only(bottom: 8.h),
                 padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 12.h),
                 decoration: BoxDecoration(
-                  color: Colors.grey[50],
+                  color: timeBg,
                   borderRadius: BorderRadius.circular(8.r),
-                  border: Border.all(color: Colors.grey[300]!),
+                  border: Border.all(color: borderColor),
                 ),
                 child: Row(
                   children: [
@@ -431,7 +473,7 @@ class AddMedicationScreen extends GetView<MedicationController> {
                         _formatTimeForDisplay(time),
                         style: TextStyle(
                           fontSize: 14.sp,
-                          color: Colors.black87,
+                          color: textColor,
                         ),
                       ),
                     ),
@@ -439,7 +481,7 @@ class AddMedicationScreen extends GetView<MedicationController> {
                       'Tap to edit',
                       style: TextStyle(
                         fontSize: 11.sp,
-                        color: Colors.grey[500],
+                        color: subtitleColor,
                       ),
                     ),
                     SizedBox(width: 8.w),
@@ -467,7 +509,11 @@ class AddMedicationScreen extends GetView<MedicationController> {
     );
   }
 
-  Widget _buildDaysSelection() {
+  Widget _buildDaysSelection(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final chipBg = isDark ? const Color(0xFF0F172A) : null;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -476,14 +522,14 @@ class AddMedicationScreen extends GetView<MedicationController> {
           style: TextStyle(
             fontSize: 14.sp,
             fontWeight: FontWeight.w500,
-            color: Colors.black87,
+            color: textColor,
           ),
         ),
         SizedBox(height: 8.h),
         Obx(() => Column(
           children: [
             CheckboxListTile(
-              title: Text('Daily', style: TextStyle(fontSize: 14.sp)),
+              title: Text('Daily', style: TextStyle(fontSize: 14.sp, color: textColor)),
               value: controller.isDailySchedule.value,
               onChanged: (value) {
                 if (value!) {
@@ -501,7 +547,7 @@ class AddMedicationScreen extends GetView<MedicationController> {
                 spacing: 8.w,
                 children: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day) {
                   return Obx(() => FilterChip(
-                    label: Text(day, style: TextStyle(fontSize: 12.sp)),
+                    label: Text(day, style: TextStyle(fontSize: 12.sp, color: controller.selectedDays.contains(day) ? Colors.blue : textColor)),
                     selected: controller.selectedDays.contains(day),
                     onSelected: (selected) {
                       if (selected) {
@@ -510,6 +556,7 @@ class AddMedicationScreen extends GetView<MedicationController> {
                         controller.selectedDays.remove(day);
                       }
                     },
+                    backgroundColor: chipBg,
                     selectedColor: Colors.blue.withValues(alpha: 0.3),
                     checkmarkColor: Colors.blue,
                   ));
@@ -522,13 +569,18 @@ class AddMedicationScreen extends GetView<MedicationController> {
     );
   }
 
-  Widget _buildReminderSection() {
+  Widget _buildReminderSection(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardBg = isDark ? const Color(0xFF1E293B) : Colors.white;
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final subtitleColor = isDark ? Colors.grey[400] : Colors.grey[600];
+
     return Container(
       padding: EdgeInsets.all(16.w),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cardBg,
         borderRadius: BorderRadius.circular(12.r),
-        boxShadow: [
+        boxShadow: isDark ? null : [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 4,
@@ -544,13 +596,13 @@ class AddMedicationScreen extends GetView<MedicationController> {
             style: TextStyle(
               fontSize: 16.sp,
               fontWeight: FontWeight.w600,
-              color: Colors.black87,
+              color: textColor,
             ),
           ),
           SizedBox(height: 16.h),
           Obx(() => SwitchListTile(
-            title: Text('Enable reminders', style: TextStyle(fontSize: 14.sp)),
-            subtitle: Text('Get notifications when it\'s time to take medication', style: TextStyle(fontSize: 12.sp)),
+            title: Text('Enable reminders', style: TextStyle(fontSize: 14.sp, color: textColor)),
+            subtitle: Text('Get notifications when it\'s time to take medication', style: TextStyle(fontSize: 12.sp, color: subtitleColor)),
             value: controller.remindersEnabled.value,
             onChanged: (value) => controller.remindersEnabled.value = value,
             contentPadding: EdgeInsets.zero,
@@ -563,8 +615,8 @@ class AddMedicationScreen extends GetView<MedicationController> {
               children: [
                 SizedBox(height: 16.h),
                 SwitchListTile(
-                  title: Text('Caregiver escalation', style: TextStyle(fontSize: 14.sp)),
-                  subtitle: Text('Notify caregiver if dose is missed', style: TextStyle(fontSize: 12.sp)),
+                  title: Text('Caregiver escalation', style: TextStyle(fontSize: 14.sp, color: textColor)),
+                  subtitle: Text('Notify caregiver if dose is missed', style: TextStyle(fontSize: 12.sp, color: subtitleColor)),
                   value: controller.caregiverEscalationEnabled.value,
                   onChanged: (value) => controller.caregiverEscalationEnabled.value = value,
                   contentPadding: EdgeInsets.zero,
@@ -578,22 +630,34 @@ class AddMedicationScreen extends GetView<MedicationController> {
   }
 
   Widget _buildDropdown({
+    required BuildContext context,
     required String? value,
     required List<String> items,
     required ValueChanged<String?> onChanged,
     required String hint,
   }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final borderColor = isDark ? Colors.grey[600]! : Colors.grey[300]!;
+    final fillColor = isDark ? const Color(0xFF0F172A) : Colors.white;
+    final labelColor = isDark ? Colors.grey[400] : Colors.grey[600];
+
     return DropdownButtonFormField<String>(
       value: value?.isEmpty == true ? null : value,
+      dropdownColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+      style: TextStyle(fontSize: 14.sp, color: textColor),
       decoration: InputDecoration(
         labelText: hint,
+        labelStyle: TextStyle(color: labelColor),
+        filled: true,
+        fillColor: fillColor,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8.r),
-          borderSide: BorderSide(color: Colors.grey[300]!),
+          borderSide: BorderSide(color: borderColor),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8.r),
-          borderSide: BorderSide(color: Colors.grey[300]!),
+          borderSide: BorderSide(color: borderColor),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8.r),
@@ -604,14 +668,14 @@ class AddMedicationScreen extends GetView<MedicationController> {
       items: items.map((item) {
         return DropdownMenuItem<String>(
           value: item,
-          child: Text(item, style: TextStyle(fontSize: 14.sp)),
+          child: Text(item, style: TextStyle(fontSize: 14.sp, color: textColor)),
         );
       }).toList(),
       onChanged: onChanged,
     );
   }
 
-  Widget _buildSaveButton() {
+  Widget _buildSaveButton(BuildContext context) {
     return Obx(() => CustomButton(
       text: isEditing ? 'Update Medication' : 'Save Medication',
       onPressed: controller.requestStatus.value == Status.LOADING ? () {} : _saveMedication,

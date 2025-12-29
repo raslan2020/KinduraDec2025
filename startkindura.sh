@@ -14,6 +14,50 @@ echo "🚀 Starting Kindura AI Services (Local Development Mode)..."
 # Get the directory where this script is located
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Ask user for device type
+echo ""
+echo "📱 Select run mode:"
+echo "  1) iOS Simulator (iPhone 16)"
+echo "  2) Real iPhone (Physical Device)"
+echo "  3) Real iPhone + Apple Watch (Physical Devices)"
+echo "  4) Backend Only (Django + LiveKit Agent)"
+echo ""
+read -p "Enter choice [1-4]: " DEVICE_CHOICE
+
+case $DEVICE_CHOICE in
+    1)
+        USE_SIMULATOR=true
+        USE_REAL_WATCH=false
+        BACKEND_ONLY=false
+        echo "✅ Using iOS Simulator"
+        ;;
+    2)
+        USE_SIMULATOR=false
+        USE_REAL_WATCH=false
+        BACKEND_ONLY=false
+        echo "✅ Using Real iPhone"
+        ;;
+    3)
+        USE_SIMULATOR=false
+        USE_REAL_WATCH=true
+        BACKEND_ONLY=false
+        echo "✅ Using Real iPhone + Apple Watch"
+        ;;
+    4)
+        USE_SIMULATOR=false
+        USE_REAL_WATCH=false
+        BACKEND_ONLY=true
+        echo "✅ Backend Only Mode - Starting Django + LiveKit Agent"
+        ;;
+    *)
+        echo "Invalid choice. Defaulting to iOS Simulator."
+        USE_SIMULATOR=true
+        USE_REAL_WATCH=false
+        BACKEND_ONLY=false
+        ;;
+esac
+echo ""
+
 # Kill any existing processes
 echo "🔄 Stopping existing services..."
 pkill -f "flutter run" 2>/dev/null || true
@@ -150,85 +194,165 @@ for i in {1..10}; do
     fi
 done
 
-echo "📱 Opening iOS Simulator..."
-open -a Simulator
+# Handle Backend Only Mode
+if [ "$BACKEND_ONLY" = true ]; then
+    echo ""
+    echo "🎉 Backend services started successfully!"
+    echo ""
+    echo "📊 Services Running:"
+    echo "  PostgreSQL DB:  localhost:5432/kindura_db (kindura_user)"
+    echo "  Django API:     New Terminal Tab (http://0.0.0.0:8000)"
+    echo "  LiveKit Agent:  New Terminal Tab (wss://kindura-u99yilqz.livekit.cloud)"
+    echo ""
+    echo "📱 To run the Flutter app on your device:"
+    echo "  • Open Xcode and run the app manually"
+    echo "  • Or use: flutter run -d <device_name>"
+    echo ""
+    echo "🛑 To stop all services:"
+    echo "  • Close the Django and LiveKit Terminal tabs manually"
+    echo "  • Or use Ctrl+C in those terminals"
+    echo ""
+    read -p "Press Enter to stop backend services..."
+    cleanup
+    exit 0
+fi
 
-# Wait for simulator to be ready
-echo "⏳ Waiting for iOS Simulator to be ready..."
-sleep 10
+# Handle iOS Simulator vs Real Device
+if [ "$USE_SIMULATOR" = true ]; then
+    echo "📱 Opening iOS Simulator..."
+    open -a Simulator
 
-# Build and install watchOS app
-echo "⌚ Building and installing Apple Watch app..."
-cd "$SCRIPT_DIR/watchos"
-if [ -d "KinduraWatch.xcodeproj" ]; then
-    echo "🔨 Building KinduraWatch..."
+    # Wait for simulator to be ready
+    echo "⏳ Waiting for iOS Simulator to be ready..."
+    sleep 10
 
-    # Clean and build the watchOS app
-    xcodebuild -project KinduraWatch.xcodeproj \
-        -scheme KinduraWatch \
-        -sdk watchsimulator \
-        -configuration Debug \
-        -derivedDataPath build \
-        clean build 2>&1 | tee /tmp/watch_build.log | grep -E "(BUILD|error:|warning:|\*\*)" || true
+    # Build and install watchOS app for SIMULATOR
+    echo "⌚ Building and installing Apple Watch app (Simulator)..."
+    cd "$SCRIPT_DIR/watchos"
+    if [ -d "KinduraWatch.xcodeproj" ]; then
+        echo "🔨 Building KinduraWatch for Simulator..."
 
-    # Check build result
-    if grep -q "BUILD SUCCEEDED" /tmp/watch_build.log; then
-        echo "✅ watchOS app built successfully"
+        # Clean and build the watchOS app for simulator
+        xcodebuild -project KinduraWatch.xcodeproj \
+            -scheme KinduraWatch \
+            -sdk watchsimulator \
+            -configuration Debug \
+            -derivedDataPath build \
+            clean build 2>&1 | tee /tmp/watch_build.log | grep -E "(BUILD|error:|warning:|\*\*)" || true
 
-        # Find the built app
-        WATCH_APP=$(find build -name "KinduraWatch.app" -path "*Debug-watchsimulator*" -type d 2>/dev/null | head -1)
+        # Check build result
+        if grep -q "BUILD SUCCEEDED" /tmp/watch_build.log; then
+            echo "✅ watchOS app built successfully"
 
-        if [ -n "$WATCH_APP" ]; then
-            echo "📱 Found app at: $WATCH_APP"
+            # Find the built app
+            WATCH_APP=$(find build -name "KinduraWatch.app" -path "*Debug-watchsimulator*" -type d 2>/dev/null | head -1)
 
-            # Get available Watch simulators (prefer booted one)
-            echo "🔍 Looking for Apple Watch simulator..."
-            WATCH_UDID=$(xcrun simctl list devices available | grep -i "Apple Watch" | grep -i "Booted" | head -1 | grep -oE '[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}')
-            # If no booted watch, get first available
-            if [ -z "$WATCH_UDID" ]; then
-                WATCH_UDID=$(xcrun simctl list devices available | grep -i "Apple Watch" | head -1 | grep -oE '[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}')
-            fi
+            if [ -n "$WATCH_APP" ]; then
+                echo "📱 Found app at: $WATCH_APP"
 
-            if [ -n "$WATCH_UDID" ]; then
-                echo "📲 Installing on Watch simulator ($WATCH_UDID)..."
+                # Get available Watch simulators (prefer booted one)
+                echo "🔍 Looking for Apple Watch simulator..."
+                WATCH_UDID=$(xcrun simctl list devices available | grep -i "Apple Watch" | grep -i "Booted" | head -1 | grep -oE '[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}')
+                # If no booted watch, get first available
+                if [ -z "$WATCH_UDID" ]; then
+                    WATCH_UDID=$(xcrun simctl list devices available | grep -i "Apple Watch" | head -1 | grep -oE '[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}')
+                fi
 
-                # Boot the Watch simulator if not already booted
-                xcrun simctl boot "$WATCH_UDID" 2>/dev/null || true
-                sleep 2
+                if [ -n "$WATCH_UDID" ]; then
+                    echo "📲 Installing on Watch simulator ($WATCH_UDID)..."
 
-                # Install the app
-                if xcrun simctl install "$WATCH_UDID" "$WATCH_APP"; then
-                    echo "✅ App installed successfully"
+                    # Boot the Watch simulator if not already booted
+                    xcrun simctl boot "$WATCH_UDID" 2>/dev/null || true
+                    sleep 2
 
-                    # Launch the app
-                    if xcrun simctl launch "$WATCH_UDID" com.kindura.ai.watchkitapp; then
-                        echo "✅ KinduraWatch launched on Watch simulator"
+                    # Install the app
+                    if xcrun simctl install "$WATCH_UDID" "$WATCH_APP"; then
+                        echo "✅ App installed successfully"
+
+                        # Launch the app
+                        if xcrun simctl launch "$WATCH_UDID" com.kindura.ai.watchkitapp; then
+                            echo "✅ KinduraWatch launched on Watch simulator"
+                        else
+                            echo "⚠️  Failed to launch app (may need manual launch)"
+                        fi
                     else
-                        echo "⚠️  Failed to launch app (may need manual launch)"
+                        echo "❌ Failed to install app on Watch simulator"
                     fi
                 else
-                    echo "❌ Failed to install app on Watch simulator"
+                    echo "⚠️  No Apple Watch simulator found"
+                    echo "💡 Add a Watch simulator in Xcode > Window > Devices and Simulators"
                 fi
             else
-                echo "⚠️  No Apple Watch simulator found"
-                echo "💡 Add a Watch simulator in Xcode > Window > Devices and Simulators"
-                echo "Available simulators:"
-                xcrun simctl list devices available | grep -i watch || echo "None found"
+                echo "❌ Built app not found in expected location"
             fi
         else
-            echo "❌ Built app not found in expected location"
-            echo "Searching for .app files..."
-            find build -name "*.app" -type d 2>/dev/null
+            echo "❌ watchOS app build FAILED"
+            echo "Check /tmp/watch_build.log for details"
+            grep -A2 "error:" /tmp/watch_build.log || true
         fi
     else
-        echo "❌ watchOS app build FAILED"
-        echo "Check /tmp/watch_build.log for details"
-        grep -A2 "error:" /tmp/watch_build.log || true
+        echo "⚠️  watchOS project not found at watchos/KinduraWatch.xcodeproj"
     fi
+    cd "$SCRIPT_DIR"
 else
-    echo "⚠️  watchOS project not found at watchos/KinduraWatch.xcodeproj"
+    echo "📱 Using Real Device mode - skipping simulator setup"
+
+    # Build and install watchOS app for REAL DEVICE if requested
+    if [ "$USE_REAL_WATCH" = true ]; then
+        echo "⌚ Building and installing Apple Watch app (Real Device)..."
+        cd "$SCRIPT_DIR/watchos"
+        if [ -d "KinduraWatch.xcodeproj" ]; then
+            echo "🔨 Building KinduraWatch for Real Device..."
+
+            # Build for real watchOS device with explicit derivedDataPath
+            xcodebuild -project KinduraWatch.xcodeproj \
+                -scheme KinduraWatch \
+                -destination 'generic/platform=watchOS' \
+                -configuration Debug \
+                -derivedDataPath build \
+                clean build 2>&1 | tee /tmp/watch_build.log | grep -E "(BUILD|error:|warning:|\*\*)" || true
+
+            # Check build result
+            if grep -q "BUILD SUCCEEDED" /tmp/watch_build.log; then
+                echo "✅ watchOS app built successfully for real device"
+
+                # Find the built app in local build directory
+                WATCH_APP=$(find build -name "KinduraWatch.app" -path "*Debug-watchos*" -type d 2>/dev/null | head -1)
+
+                if [ -n "$WATCH_APP" ]; then
+                    echo "📱 Found app at: $WATCH_APP"
+
+                    # Find connected Apple Watch
+                    echo "🔍 Looking for connected Apple Watch..."
+                    WATCH_UDID=$(xcrun devicectl list devices 2>/dev/null | grep -i "watch" | grep "available" | head -1 | awk '{print $3}')
+
+                    if [ -n "$WATCH_UDID" ]; then
+                        echo "📲 Installing on real Apple Watch ($WATCH_UDID)..."
+
+                        # Install using devicectl
+                        if xcrun devicectl device install app --device "$WATCH_UDID" "$WATCH_APP" 2>&1; then
+                            echo "✅ App installed on Apple Watch"
+
+                            # Try to launch
+                            xcrun devicectl device process launch --device "$WATCH_UDID" com.kindura.ai.watchkitapp 2>&1 || echo "⚠️  Launch manually if Watch is locked"
+                        else
+                            echo "⚠️  Failed to install app - check if Watch is connected and unlocked"
+                        fi
+                    else
+                        echo "⚠️  No Apple Watch found"
+                        echo "💡 Make sure your Apple Watch is paired and connected"
+                    fi
+                else
+                    echo "❌ Built app not found"
+                fi
+            else
+                echo "❌ watchOS app build FAILED"
+                grep -A2 "error:" /tmp/watch_build.log || true
+            fi
+        fi
+        cd "$SCRIPT_DIR"
+    fi
 fi
-cd "$SCRIPT_DIR"
 
 # Check Flutter installation
 echo "🔍 Checking Flutter installation..."
@@ -247,21 +371,57 @@ echo "🔄 Stopping any existing Flutter apps..."
 pkill -f "flutter run" 2>/dev/null || true
 sleep 2
 
-# Check if iPhone 16 is available
-echo "📱 Checking for iPhone 16 simulator..."
-if flutter devices | grep -q "iPhone 16"; then
-    echo "✅ iPhone 16 simulator detected"
-    echo "📱 Starting Flutter App on iPhone 16 (full restart)..."
-    flutter run -d "iPhone 16" &
-    FLUTTER_PID=$!
-    echo "✅ Flutter App started (PID: $FLUTTER_PID)"
+# Run Flutter based on device choice
+if [ "$USE_SIMULATOR" = true ]; then
+    # Check if iPhone 16 simulator is available
+    echo "📱 Checking for iPhone 16 simulator..."
+    if flutter devices | grep -q "iPhone 16"; then
+        echo "✅ iPhone 16 simulator detected"
+        echo "📱 Starting Flutter App on iPhone 16 Simulator..."
+        flutter run -d "iPhone 16" &
+        FLUTTER_PID=$!
+        echo "✅ Flutter App started on Simulator (PID: $FLUTTER_PID)"
+    else
+        echo "⚠️  iPhone 16 simulator not found, available devices:"
+        flutter devices
+        echo "🔄 Trying to run on any available iOS simulator..."
+        flutter run -d ios &
+        FLUTTER_PID=$!
+        echo "✅ Flutter App started (PID: $FLUTTER_PID)"
+    fi
 else
-    echo "⚠️  iPhone 16 simulator not found, available devices:"
-    flutter devices
-    echo "🔄 Trying to run on any available iOS simulator..."
-    flutter run -d ios &
-    FLUTTER_PID=$!
-    echo "✅ Flutter App started (PID: $FLUTTER_PID)"
+    # Run on real device
+    echo "📱 Looking for connected iPhone..."
+
+    # Find connected physical iPhone
+    IPHONE_NAME=$(flutter devices | grep -i "mobile" | grep -v "simulator" | head -1 | sed 's/ (mobile).*//' | xargs)
+
+    if [ -n "$IPHONE_NAME" ]; then
+        echo "✅ Found: $IPHONE_NAME"
+        echo "📱 Starting Flutter App on Real iPhone ($IPHONE_NAME)..."
+        flutter run -d "$IPHONE_NAME" &
+        FLUTTER_PID=$!
+        echo "✅ Flutter App started on Real Device (PID: $FLUTTER_PID)"
+    else
+        echo "⚠️  No physical iPhone found. Available devices:"
+        flutter devices
+        echo ""
+        echo "💡 Make sure your iPhone is:"
+        echo "   - Connected via USB"
+        echo "   - Unlocked with Developer Mode enabled"
+        echo "   - Trusted on this Mac"
+        echo ""
+        read -p "Enter device name manually (or press Enter to cancel): " MANUAL_DEVICE
+        if [ -n "$MANUAL_DEVICE" ]; then
+            echo "📱 Starting Flutter App on $MANUAL_DEVICE..."
+            flutter run -d "$MANUAL_DEVICE" &
+            FLUTTER_PID=$!
+            echo "✅ Flutter App started (PID: $FLUTTER_PID)"
+        else
+            echo "❌ No device selected. Exiting."
+            exit 1
+        fi
+    fi
 fi
 
 echo ""

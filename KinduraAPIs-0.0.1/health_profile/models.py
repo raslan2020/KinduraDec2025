@@ -1,4 +1,5 @@
 from django.db import models
+from django.core.validators import MinValueValidator, MaxValueValidator
 from users.models import User
 
 
@@ -106,24 +107,65 @@ class WatchVitals(models.Model):
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='watch_vitals')
 
-    # Vitals
-    heart_rate = models.FloatField(help_text="Heart rate in BPM")
-    blood_oxygen = models.FloatField(help_text="Blood oxygen percentage (SpO2)")
-    hrv = models.FloatField(blank=True, null=True, help_text="Heart rate variability in ms")
-    respiratory_rate = models.FloatField(blank=True, null=True, help_text="Breaths per minute")
+    # Vitals - with physiological validation ranges
+    heart_rate = models.FloatField(
+        validators=[MinValueValidator(30), MaxValueValidator(250)],
+        help_text="Heart rate in BPM (valid range: 30-250)"
+    )
+    blood_oxygen = models.FloatField(
+        validators=[MinValueValidator(50), MaxValueValidator(100)],
+        help_text="Blood oxygen percentage SpO2 (valid range: 50-100)"
+    )
+    hrv = models.FloatField(
+        blank=True, null=True,
+        validators=[MinValueValidator(1), MaxValueValidator(300)],
+        help_text="Heart rate variability in ms (valid range: 1-300)"
+    )
+    respiratory_rate = models.FloatField(
+        blank=True, null=True,
+        validators=[MinValueValidator(5), MaxValueValidator(60)],
+        help_text="Breaths per minute (valid range: 5-60)"
+    )
 
-    # Sleep data
-    total_sleep_hours = models.FloatField(blank=True, null=True)
-    deep_sleep_hours = models.FloatField(blank=True, null=True)
-    rem_sleep_hours = models.FloatField(blank=True, null=True)
-    core_sleep_hours = models.FloatField(blank=True, null=True)
-    awake_time_hours = models.FloatField(blank=True, null=True)
-    awakenings_count = models.IntegerField(default=0, help_text="Number of times woke up during night")
+    # Sleep data - with reasonable validation
+    total_sleep_hours = models.FloatField(
+        blank=True, null=True,
+        validators=[MinValueValidator(0), MaxValueValidator(24)]
+    )
+    deep_sleep_hours = models.FloatField(
+        blank=True, null=True,
+        validators=[MinValueValidator(0), MaxValueValidator(12)]
+    )
+    rem_sleep_hours = models.FloatField(
+        blank=True, null=True,
+        validators=[MinValueValidator(0), MaxValueValidator(12)]
+    )
+    core_sleep_hours = models.FloatField(
+        blank=True, null=True,
+        validators=[MinValueValidator(0), MaxValueValidator(12)]
+    )
+    awake_time_hours = models.FloatField(
+        blank=True, null=True,
+        validators=[MinValueValidator(0), MaxValueValidator(24)]
+    )
+    awakenings_count = models.IntegerField(
+        default=0,
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+        help_text="Number of times woke up during night"
+    )
     sleep_quality = models.CharField(max_length=10, choices=SLEEP_QUALITY_CHOICES, blank=True, null=True)
 
     # Fall detection
     fall_detected = models.BooleanField(default=False)
     fall_resolved = models.BooleanField(default=True)
+
+    # Activity data
+    steps = models.IntegerField(default=0, help_text="Daily step count")
+    calories = models.IntegerField(default=0, help_text="Active calories burned")
+    distance_km = models.FloatField(default=0, help_text="Distance in kilometers")
+    floors_climbed = models.IntegerField(default=0, help_text="Floors climbed")
+    exercise_minutes = models.IntegerField(default=0, help_text="Exercise minutes")
+    stand_minutes = models.IntegerField(default=0, help_text="Stand minutes")
 
     # Timestamps
     recorded_at = models.DateTimeField(help_text="When the data was recorded on Watch")

@@ -9,6 +9,7 @@ import 'package:kindura_ai/res/colors/app_color.dart';
 import 'package:kindura_ai/screens/bottom_navigation/bottom_navigation_controller.dart';
 import 'package:kindura_ai/screens/profile/profile_controller.dart';
 import 'package:kindura_ai/services/theme_service.dart';
+import 'package:kindura_ai/services/watch_vitals_service.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -656,9 +657,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final caregiverSmsEnabled = false.obs;
     final caregiverEmailEnabled = false.obs;
     final themeService = Get.find<ThemeService>();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final watchVitalsService = WatchVitalsService();
+    final healthKitAuthorized = false.obs;
+    final watchPaired = false.obs;
+    final isLoadingHealth = true.obs;
+
+    // Load health integration status
+    _loadHealthIntegrationStatus(
+      watchVitalsService,
+      healthKitAuthorized,
+      watchPaired,
+      isLoadingHealth,
+    );
 
     Get.dialog(
       AlertDialog(
+        backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
         title: Row(
           children: [
             Icon(Icons.settings, color: AppColor.primaryColor),
@@ -719,6 +734,170 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       contentPadding: EdgeInsets.symmetric(horizontal: 12.w),
                     ),
                   )),
+              SizedBox(height: 24.h),
+
+              // Apple Health Section
+              Text(
+                'Apple Health',
+                style: TextStyle(
+                  fontSize: 16.sp,
+                  fontWeight: FontWeight.w600,
+                  color: Theme.of(context).textTheme.bodyLarge?.color,
+                ),
+              ),
+              SizedBox(height: 8.h),
+              Text(
+                'Connect to Apple Health to sync vitals from your Apple Watch',
+                style: TextStyle(
+                  fontSize: 12.sp,
+                  color: Theme.of(context).textTheme.bodySmall?.color,
+                ),
+              ),
+              SizedBox(height: 12.h),
+              Obx(() => Container(
+                    padding: EdgeInsets.all(12.w),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: AppColor.gray500),
+                      borderRadius: BorderRadius.circular(8.w),
+                    ),
+                    child: isLoadingHealth.value
+                        ? Center(
+                            child: SizedBox(
+                              height: 24.h,
+                              width: 24.h,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: AppColor.primaryColor,
+                              ),
+                            ),
+                          )
+                        : Column(
+                            children: [
+                              // Watch Status Row
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.watch,
+                                    color: watchPaired.value
+                                        ? Colors.green
+                                        : Colors.grey,
+                                    size: 24.sp,
+                                  ),
+                                  SizedBox(width: 12.w),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'Apple Watch',
+                                          style: TextStyle(
+                                            color: Theme.of(context)
+                                                .textTheme
+                                                .bodyLarge
+                                                ?.color,
+                                            fontSize: 14.sp,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                        Text(
+                                          watchPaired.value
+                                              ? 'Paired'
+                                              : 'Not paired',
+                                          style: TextStyle(
+                                            color: watchPaired.value
+                                                ? Colors.green
+                                                : Colors.grey,
+                                            fontSize: 12.sp,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              Divider(height: 24.h, color: AppColor.gray500),
+                              // HealthKit Status Row
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.favorite,
+                                    color: healthKitAuthorized.value
+                                        ? Colors.red
+                                        : Colors.grey,
+                                    size: 24.sp,
+                                  ),
+                                  SizedBox(width: 12.w),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'Health Data Access',
+                                          style: TextStyle(
+                                            color: Theme.of(context)
+                                                .textTheme
+                                                .bodyLarge
+                                                ?.color,
+                                            fontSize: 14.sp,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                        Text(
+                                          healthKitAuthorized.value
+                                              ? 'Authorized'
+                                              : 'Not authorized',
+                                          style: TextStyle(
+                                            color: healthKitAuthorized.value
+                                                ? Colors.green
+                                                : Colors.grey,
+                                            fontSize: 12.sp,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  if (!healthKitAuthorized.value)
+                                    ElevatedButton(
+                                      onPressed: () async {
+                                        // Close the dialog first
+                                        Get.back();
+                                        // Then request HealthKit access
+                                        await _requestHealthKitAccess(
+                                          watchVitalsService,
+                                          healthKitAuthorized,
+                                        );
+                                      },
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: AppColor.primaryColor,
+                                        padding: EdgeInsets.symmetric(
+                                          horizontal: 12.w,
+                                          vertical: 8.h,
+                                        ),
+                                      ),
+                                      child: Text(
+                                        'Connect',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 12.sp,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ],
+                          ),
+                  )),
+              SizedBox(height: 8.h),
+              Text(
+                'Kindura reads heart rate, blood oxygen, sleep data, and fall detection from your Apple Watch.',
+                style: TextStyle(
+                  fontSize: 11.sp,
+                  color: Theme.of(context).textTheme.bodySmall?.color,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
               SizedBox(height: 24.h),
 
               // Unit System Section
@@ -802,7 +981,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 style: TextStyle(
                   fontSize: 16.sp,
                   fontWeight: FontWeight.w600,
-                  color: AppColor.black,
+                  color: Theme.of(context).textTheme.bodyLarge?.color,
                 ),
               ),
               SizedBox(height: 8.h),
@@ -810,7 +989,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 'Notify caregiver when medication time arrives',
                 style: TextStyle(
                   fontSize: 12.sp,
-                  color: AppColor.gray500,
+                  color: Theme.of(context).textTheme.bodySmall?.color,
                 ),
               ),
               SizedBox(height: 16.h),
@@ -818,10 +997,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
               // SMS Notification Toggle
               Obx(() => SwitchListTile(
                     title: Text('SMS Notifications',
-                        style: TextStyle(color: AppColor.black)),
+                        style: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color)),
                     subtitle: Text('Send SMS to caregiver',
                         style: TextStyle(
-                            color: AppColor.gray500, fontSize: 12.sp)),
+                            color: Theme.of(context).textTheme.bodySmall?.color, fontSize: 12.sp)),
                     value: caregiverSmsEnabled.value,
                     onChanged: (value) {
                       caregiverSmsEnabled.value = value;
@@ -839,10 +1018,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
               // Email Notification Toggle
               Obx(() => SwitchListTile(
                     title: Text('Email Notifications',
-                        style: TextStyle(color: AppColor.black)),
+                        style: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color)),
                     subtitle: Text('Send email to caregiver',
                         style: TextStyle(
-                            color: AppColor.gray500, fontSize: 12.sp)),
+                            color: Theme.of(context).textTheme.bodySmall?.color, fontSize: 12.sp)),
                     value: caregiverEmailEnabled.value,
                     onChanged: (value) {
                       caregiverEmailEnabled.value = value;
@@ -903,6 +1082,115 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  // MARK: - Apple Health Helper Methods
+
+  Future<void> _loadHealthIntegrationStatus(
+    WatchVitalsService service,
+    RxBool healthKitAuthorized,
+    RxBool watchPaired,
+    RxBool isLoading,
+  ) async {
+    try {
+      final status = await service.getHealthIntegrationStatus();
+      healthKitAuthorized.value = status['healthKitAuthorized'] ?? false;
+      watchPaired.value = status['isPaired'] ?? false;
+    } catch (e) {
+      print('[ProfileScreen] Error loading health status: $e');
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  Future<void> _requestHealthKitAccess(
+    WatchVitalsService service,
+    RxBool healthKitAuthorized,
+  ) async {
+    try {
+      final success = await service.requestHealthKitAuthorization();
+      healthKitAuthorized.value = success;
+
+      if (success) {
+        print('[ProfileScreen] ✅ HealthKit access granted');
+        // Show success dialog
+        _showHealthAccessResultDialog(
+          title: 'Health Access Granted',
+          message: 'Apple Health access granted! Your vitals will now sync automatically.',
+          isSuccess: true,
+        );
+      } else {
+        print('[ProfileScreen] ⚠️ HealthKit access denied or unavailable');
+        // Show instructions dialog
+        _showHealthAccessResultDialog(
+          title: 'Health Access Required',
+          message: 'Please enable Health access:\n\n1. Open iPhone Settings\n2. Go to Privacy & Security\n3. Tap Health\n4. Find Kindura and enable all permissions',
+          isSuccess: false,
+        );
+      }
+    } catch (e) {
+      print('[ProfileScreen] ❌ Error requesting HealthKit access: $e');
+      _showHealthAccessResultDialog(
+        title: 'Error',
+        message: 'Failed to request Health access. Please try again.',
+        isSuccess: false,
+      );
+    }
+  }
+
+  void _showHealthAccessResultDialog({
+    required String title,
+    required String message,
+    required bool isSuccess,
+  }) {
+    final isDark = Theme.of(Get.context!).brightness == Brightness.dark;
+
+    Get.dialog(
+      AlertDialog(
+        backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Icon(
+              isSuccess ? Icons.check_circle : Icons.info_outline,
+              color: isSuccess ? Colors.green : Colors.orange,
+              size: 28,
+            ),
+            SizedBox(width: 8.w),
+            Expanded(
+              child: Text(
+                title,
+                style: TextStyle(
+                  color: isDark ? Colors.white : Colors.black87,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16.sp,
+                ),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          message,
+          style: TextStyle(
+            color: isDark ? Colors.white70 : Colors.black54,
+            fontSize: 14.sp,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Get.back(),
+            child: Text(
+              'OK',
+              style: TextStyle(
+                color: AppColor.primaryColor,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ),
+      barrierDismissible: true,
     );
   }
 }

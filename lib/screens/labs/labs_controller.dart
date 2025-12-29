@@ -318,14 +318,51 @@ class LabsController extends GetxController {
     }
   }
 
-  // Upload lab document (supports multiple files)
+  // Upload lab document (supports multiple files from Files or Photos)
   Future<void> uploadLabDocument() async {
+    // Show source picker dialog
+    final source = await Get.dialog<String>(
+      AlertDialog(
+        title: const Text('Upload Lab Document'),
+        content: const Text('Choose where to upload from:'),
+        actions: [
+          TextButton.icon(
+            onPressed: () => Get.back(result: 'photos'),
+            icon: const Icon(Icons.photo_library),
+            label: const Text('Photo Library'),
+          ),
+          TextButton.icon(
+            onPressed: () => Get.back(result: 'files'),
+            icon: const Icon(Icons.folder),
+            label: const Text('Files (PDF)'),
+          ),
+          TextButton(
+            onPressed: () => Get.back(result: null),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+
+    if (source == null) return;
+
     try {
-      final result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
-        allowMultiple: true,  // Allow multiple file selection
-      );
+      FilePickerResult? result;
+
+      if (source == 'photos') {
+        // Pick images from Photo Library
+        result = await FilePicker.platform.pickFiles(
+          type: FileType.image,
+          allowMultiple: true,
+        );
+      } else {
+        // Pick files from Files app (PDFs and images)
+        result = await FilePicker.platform.pickFiles(
+          type: FileType.custom,
+          allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png', 'heic'],
+          allowMultiple: true,
+        );
+      }
 
       if (result != null && result.files.isNotEmpty) {
         // If only one file, process it directly
@@ -337,6 +374,7 @@ class LabsController extends GetxController {
         }
       }
     } catch (e) {
+      print('[LabsController] File picker error: $e');
       AppToast.showToast('Failed to pick file');
     }
   }
@@ -1032,5 +1070,96 @@ class LabsController extends GetxController {
         'gender': range.gender,
       }).toList(),
     };
+  }
+
+  // ======== BIOMARKER OBSERVATION CRUD METHODS ========
+
+  /// Add a new biomarker observation
+  Future<void> addBiomarkerObservation({
+    required String biomarkerId,
+    required double value,
+    required String unit,
+    required DateTime collectedAt,
+    String? notes,
+  }) async {
+    try {
+      final response = await _repository.addManualObservation(
+        biomarkerId: biomarkerId,
+        value: value,
+        unit: unit,
+        collectedAt: collectedAt,
+        notes: notes,
+      );
+
+      if (response.status == Status.COMPLETED) {
+        AppToast.showToast('Measurement added successfully');
+        // Reload biomarker detail FIRST for instant graph update
+        if (selectedBiomarker.value != null &&
+            selectedBiomarker.value!.definition.id == biomarkerId) {
+          await loadBiomarkerDetail(biomarkerId);
+        }
+        // Then reload labs data to update the list
+        await loadLabsData();
+      } else if (response.status == Status.ERROR) {
+        AppToast.showToast('Failed to add measurement: ${response.message}');
+      }
+    } catch (e) {
+      AppToast.showToast('Failed to add measurement');
+      print('Error adding observation: $e');
+    }
+  }
+
+  /// Update an existing biomarker observation
+  Future<void> updateBiomarkerObservation({
+    required String observationId,
+    required double value,
+    required DateTime collectedAt,
+    String? notes,
+  }) async {
+    try {
+      final response = await _repository.updateObservation(
+        observationId: observationId,
+        value: value,
+        collectedAt: collectedAt,
+        notes: notes,
+      );
+
+      if (response.status == Status.COMPLETED) {
+        AppToast.showToast('Measurement updated successfully');
+        // Reload selected biomarker detail FIRST for instant graph update
+        if (selectedBiomarker.value != null) {
+          await loadBiomarkerDetail(selectedBiomarker.value!.definition.id.toString());
+        }
+        // Then reload labs data to update the list
+        await loadLabsData();
+      } else if (response.status == Status.ERROR) {
+        AppToast.showToast('Failed to update measurement: ${response.message}');
+      }
+    } catch (e) {
+      AppToast.showToast('Failed to update measurement');
+      print('Error updating observation: $e');
+    }
+  }
+
+  /// Delete a biomarker observation
+  Future<void> deleteBiomarkerObservation(String observationId) async {
+    try {
+      final response = await _repository.deleteObservation(observationId);
+
+      if (response.status == Status.COMPLETED) {
+        AppToast.showToast('Measurement deleted successfully');
+        // Reload selected biomarker detail FIRST for instant graph update
+        if (selectedBiomarker.value != null) {
+          await loadBiomarkerDetail(selectedBiomarker.value!.definition.id.toString());
+        }
+        // Then reload labs data to update the list
+        await loadLabsData();
+      } else if (response.status == Status.ERROR) {
+        AppToast.showToast('Failed to delete measurement: ${response.message}');
+      }
+    } catch (e) {
+      AppToast.showToast('Failed to delete measurement');
+      print('Error deleting observation: $e');
+    }
   }
 }

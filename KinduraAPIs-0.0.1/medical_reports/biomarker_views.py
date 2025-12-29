@@ -4,6 +4,7 @@ Comprehensive endpoints for biomarker management and analytics
 """
 import logging
 import json
+from datetime import datetime
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -296,6 +297,84 @@ def add_manual_observation(request):
             'status': False,
             'message': f'Failed to add observation: {str(e)}'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['PATCH', 'PUT', 'DELETE'])
+@permission_classes([IsAuthenticated])
+def observation_detail(request, observation_id):
+    """
+    Update or delete a biomarker observation
+
+    PATCH/PUT - Update observation:
+    - value_num: New numeric value
+    - collected_at: New date (YYYY-MM-DD format)
+    - notes: Optional notes
+
+    DELETE - Delete observation
+    """
+    try:
+        # Get the observation
+        observation = Biomarker.objects.filter(
+            id=observation_id,
+            user=request.user
+        ).first()
+
+        if not observation:
+            return Response({
+                'status': False,
+                'message': 'Observation not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        # Handle DELETE
+        if request.method == 'DELETE':
+            observation.delete()
+            return Response({
+                'status': True,
+                'message': 'Observation deleted successfully'
+            })
+
+        # Handle PATCH/PUT - Update fields if provided
+        if 'value_num' in request.data:
+            observation.value = float(request.data['value_num'])
+            # Recalculate status
+            observation.is_normal = BiomarkerService.calculate_status(
+                observation.value, observation.reference_min, observation.reference_max
+            ) == 'normal'
+
+        if 'collected_at' in request.data:
+            # Parse date string to date object
+            date_str = request.data['collected_at']
+            if isinstance(date_str, str):
+                observation.test_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+            else:
+                observation.test_date = date_str
+
+        if 'notes' in request.data:
+            observation.notes = request.data['notes']
+
+        observation.save()
+
+        return Response({
+            'status': True,
+            'message': 'Observation updated successfully',
+            'result': BiomarkerService._serialize_observation(observation)
+        })
+
+    except ValueError as e:
+        return Response({
+            'status': False,
+            'message': f'Invalid value: {str(e)}'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        return Response({
+            'status': False,
+            'message': f'Failed to process observation: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# Keep legacy function names for backward compatibility
+update_observation = observation_detail
+delete_observation = observation_detail
 
 
 @api_view(['GET'])

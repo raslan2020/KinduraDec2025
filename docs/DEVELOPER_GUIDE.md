@@ -622,6 +622,342 @@ CRITICAL: You CANNOT mark medications as taken. Direct users to the app.
 
 ---
 
+## Apple Watch & Apple Health Integration
+
+### Overview
+
+Kindura AI integrates with Apple Health and Apple Watch to provide real-time health monitoring. The system supports two data sources:
+
+1. **Apple Watch** (via WatchConnectivity) - Real-time data from paired Apple Watch
+2. **Apple Health** (via HealthKit) - Data from any HealthKit-compatible device (Watch, Oura, Whoop, etc.)
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    APPLE HEALTH INTEGRATION ARCHITECTURE                 │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│  ┌─────────────────┐       ┌─────────────────┐       ┌───────────────┐ │
+│  │   Apple Watch   │◄─────►│     iPhone      │◄─────►│  Apple Health │ │
+│  │  (watchOS App)  │  WC   │  (Flutter App)  │  HK   │   Database    │ │
+│  └────────┬────────┘       └────────┬────────┘       └───────────────┘ │
+│           │                         │                                   │
+│           │ WatchConnectivity       │ Method Channel                    │
+│           │                         │                                   │
+│           ▼                         ▼                                   │
+│  ┌────────────────────────────────────────────────────────────────────┐│
+│  │                    iOS Native (AppDelegate.swift)                   ││
+│  │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────────┐ ││
+│  │  │ WCSessionDelegate│  │   HKHealthStore │  │  FlutterMethodChannel│ ││
+│  │  │ - Receive vitals│  │ - Query samples │  │ - Handle Flutter API│ ││
+│  │  │ - Send config   │  │ - Request auth  │  │ - Return health data│ ││
+│  │  └─────────────────┘  └─────────────────┘  └─────────────────────┘ ││
+│  └────────────────────────────────────────────────────────────────────┘│
+│                                    │                                    │
+│                                    ▼                                    │
+│  ┌────────────────────────────────────────────────────────────────────┐│
+│  │                     Flutter (WatchVitalsService)                    ││
+│  │  ┌───────────────┐  ┌───────────────┐  ┌───────────────────────┐   ││
+│  │  │ getLatestVitals│  │getHealthSummary│  │  getHealthHistory     │   ││
+│  │  │               │  │               │  │  (for Vitals History) │   ││
+│  │  └───────────────┘  └───────────────┘  └───────────────────────┘   ││
+│  └────────────────────────────────────────────────────────────────────┘│
+│                                    │                                    │
+│                                    ▼                                    │
+│  ┌────────────────────────────────────────────────────────────────────┐│
+│  │                          Django API                                 ││
+│  │              /api/watch-vitals/ - Store/retrieve vitals             ││
+│  │           /api/watch-vitals/history/ - Historical data              ││
+│  └────────────────────────────────────────────────────────────────────┘│
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+
+Legend:
+  WC = WatchConnectivity Framework
+  HK = HealthKit Framework
+```
+
+### Data Flow
+
+#### 1. Real-Time Updates (Home Widget)
+
+```
+User opens app
+    │
+    ▼
+HomeController.onInit()
+    │
+    ├─► _startHealthDataRefresh()
+    │       │
+    │       └─► Timer.periodic(30 seconds)
+    │               │
+    │               └─► loadWatchVitals()
+    │
+    └─► loadWatchVitals()
+            │
+            ├─► 1. Try Django API (stored Watch data)
+            │       └─► GET /api/watch-vitals/
+            │
+            └─► 2. Get Apple Health data
+                    │
+                    └─► WatchVitalsService.getComprehensiveHealth()
+                            │
+                            └─► Native iOS: getHealthSummary()
+                                    │
+                                    ├─► fetchLatestQuantity(.heartRate)
+                                    ├─► fetchLatestQuantity(.oxygenSaturation)
+                                    ├─► fetchLatestQuantity(.heartRateVariabilitySDNN)
+                                    ├─► fetchTodayQuantity(.stepCount)
+                                    ├─► fetchTodayQuantity(.activeEnergyBurned)
+                                    ├─► fetchLastNightSleep()
+                                    └─► ... other health metrics
+```
+
+#### 2. Vitals History Screen
+
+```
+User opens Vitals History
+    │
+    ▼
+VitalsHistoryController.loadHistory()
+    │
+    ├─► 1. Try Django API first
+    │       └─► GET /api/watch-vitals/history/?days=N
+    │               │
+    │               └─► If data → Display it (dataSource = 'api')
+    │
+    └─► 2. If API empty → Fall back to Apple Health
+            │
+            └─► WatchVitalsService.getHealthHistory(days)
+                    │
+                    └─► Native iOS: getHealthHistory(days:)
+                            │
+                            ├─► fetchQuantitySamples(.heartRate)
+                            ├─► fetchQuantitySamples(.oxygenSaturation)
+                            ├─► fetchQuantitySamples(.heartRateVariabilitySDNN)
+                            └─► fetchSleepHistory()
+                                    │
+                                    └─► _convertHealthDataToVitals()
+                                            │
+                                            └─► Display (dataSource = 'apple_health')
+```
+
+#### 3. Apple Watch → iPhone → Django
+
+```
+Apple Watch (watchOS app)
+    │
+    └─► Collects real-time vitals
+            │
+            ▼
+    WCSession.sendMessage()
+            │
+            ▼
+iPhone AppDelegate (WCSessionDelegate)
+    │
+    └─► session(_ session:, didReceiveMessage:)
+            │
+            ├─► Update latestWatchVitals
+            │
+            └─► Forward to Flutter via MethodChannel
+                    │
+                    ▼
+            Flutter WatchVitalsService
+                    │
+                    └─► _sendVitalsToAPI()
+                            │
+                            └─► POST /api/watch-vitals/
+                                    │
+                                    └─► Store in PostgreSQL
+```
+
+### Key Files
+
+#### iOS Native Layer
+
+| File | Purpose |
+|------|---------|
+| `ios/Runner/AppDelegate.swift` | Central hub for Watch/HealthKit integration |
+| `watchos/KinduraWatch/HealthManager.swift` | Watch-side health data collection |
+| `watchos/KinduraWatch/ContentView.swift` | Watch app UI |
+
+#### Flutter Service Layer
+
+| File | Purpose |
+|------|---------|
+| `lib/services/watch_vitals_service.dart` | Flutter interface to native health APIs |
+| `lib/screens/home/home_controller.dart` | Home screen health data management |
+| `lib/screens/vitals_history/vitals_history_controller.dart` | Historical data with Apple Health fallback |
+
+### iOS Native Methods (AppDelegate.swift)
+
+```swift
+// Method Channel: "com.kindura.ai/watch_vitals"
+
+// Get real-time vitals from Apple Health
+case "getHealthSummary":
+    // Returns: heart_rate, blood_oxygen, hrv, respiratory_rate,
+    //          steps, calories, sleep_hours, sleep_stages, etc.
+
+// Get historical data for N days
+case "getHealthHistory":
+    // Parameters: {"days": 7}
+    // Returns: Array of samples with type, value, timestamp
+
+// Check/request HealthKit permissions
+case "requestHealthKitAuthorization":
+case "isHealthKitAuthorized":
+
+// Watch connectivity status
+case "isWatchPaired":
+case "isWatchReachable":
+
+// Sync configuration to Watch
+case "updateWatchConfiguration":
+    // Sends API baseURL and auth token to Watch
+```
+
+### Flutter Service API
+
+```dart
+class WatchVitalsService {
+  // Real-time health summary (for home widget)
+  Future<Map<String, dynamic>?> getHealthSummary();
+  Future<Map<String, dynamic>?> getComprehensiveHealth();
+
+  // Historical data (for vitals history)
+  Future<List<Map<String, dynamic>>?> getHealthHistory(int days);
+
+  // Period summaries
+  Future<Map<String, dynamic>?> getWeeklySummary();
+  Future<Map<String, dynamic>?> getMonthlySummary();
+
+  // HealthKit authorization
+  Future<bool> requestHealthKitAuthorization();
+  Future<bool> isHealthKitAuthorized();
+
+  // Watch status
+  Future<bool> isWatchPaired();
+  Future<bool> isWatchReachable();
+  Future<Map<String, dynamic>> getWatchStatus();
+}
+```
+
+### Health Data Types Collected
+
+| Category | Data Type | Source | Frequency |
+|----------|-----------|--------|-----------|
+| **Vitals** | Heart Rate | Watch/Health | Latest sample |
+| | Blood Oxygen | Watch/Health | Latest sample |
+| | HRV | Watch/Health | Latest sample |
+| | Respiratory Rate | Watch/Health | Latest sample |
+| | Resting Heart Rate | Health | Daily average |
+| **Sleep** | Sleep Duration | Watch/Health | Last night |
+| | Sleep Stages (Deep/REM/Core/Awake) | Watch/Health | Last night |
+| | Sleep Score | Calculated | Last night |
+| **Activity** | Steps | Watch/Health | Today's total |
+| | Active Calories | Watch/Health | Today's total |
+| | Distance | Watch/Health | Today's total |
+| | Exercise Minutes | Watch/Health | Today's total |
+| | Floors Climbed | Watch/Health | Today's total |
+| **Other** | Blood Pressure | Health | Latest reading |
+| | Audio Exposure | Health | Today's average |
+| | Workouts | Watch/Health | Today's list |
+| | AFib History | Watch/Health | All time |
+| | Fall Detection | Watch | Event-based |
+
+### HealthKit Authorization
+
+Required entitlement in `ios/Runner/Runner.entitlements`:
+```xml
+<key>com.apple.developer.healthkit</key>
+<true/>
+<key>com.apple.developer.healthkit.access</key>
+<array/>
+```
+
+Required in `Info.plist`:
+```xml
+<key>NSHealthShareUsageDescription</key>
+<string>Kindura needs access to your health data to track vitals, sleep patterns, and activity levels for your health dashboard.</string>
+```
+
+### Periodic Refresh Mechanism
+
+The home widget automatically refreshes health data every 30 seconds:
+
+```dart
+// lib/screens/home/home_controller.dart
+
+Timer? _healthRefreshTimer;
+
+void _startHealthDataRefresh() {
+  // Initial load
+  loadWatchVitals();
+
+  // Refresh every 30 seconds
+  _healthRefreshTimer = Timer.periodic(
+    const Duration(seconds: 30),
+    (_) => loadWatchVitals(),
+  );
+}
+
+@override
+void onClose() {
+  _healthRefreshTimer?.cancel();
+  super.onClose();
+}
+```
+
+### Fall Detection Flow
+
+```
+Apple Watch detects fall
+    │
+    ▼
+WatchOS app sends fall event via WCSession
+    │
+    ▼
+AppDelegate receives via didReceiveMessage
+    │
+    └─► Forward to Flutter via MethodChannel
+            │
+            ▼
+    WatchVitalsService.onFallDetected callback
+            │
+            ▼
+    HomeController._handleFallDetection()
+            │
+            ├─► Show alert dialog to user
+            ├─► Send fall event to Django API
+            └─► Notify emergency contacts (if configured)
+```
+
+### Debugging Health Data
+
+Enable logging in AppDelegate.swift to trace data flow:
+
+```swift
+print("[AppDelegate] getHealthSummary called")
+print("[AppDelegate] Heart rate fetched: \(value)")
+print("[AppDelegate] Health data complete - HR: \(hr), O2: \(o2)")
+```
+
+Check Xcode console for these logs during development.
+
+### Testing Without Apple Watch
+
+The app works without an Apple Watch by reading from Apple Health directly. To test:
+
+1. Open Apple Health app on iPhone
+2. Add sample data manually (Profile → Health Details → Edit)
+3. Kindura will read this data via HealthKit
+
+Alternatively, use the iOS Simulator with simulated health data.
+
+---
+
 ## Database Schema
 
 ### Entity Relationship Diagram

@@ -132,6 +132,10 @@ class WatchVitalsSerializer(serializers.ModelSerializer):
             'total_sleep_hours', 'deep_sleep_hours', 'rem_sleep_hours',
             'core_sleep_hours', 'awake_time_hours', 'awakenings_count',
             'sleep_quality', 'fall_detected', 'fall_resolved',
+            # Activity fields
+            'steps', 'calories', 'distance_km', 'floors_climbed',
+            'exercise_minutes', 'stand_minutes',
+            # Timestamps
             'recorded_at', 'created_at', 'heart_rate_status', 'sleep_quality_computed'
         ]
         read_only_fields = ['id', 'created_at', 'heart_rate_status', 'sleep_quality_computed']

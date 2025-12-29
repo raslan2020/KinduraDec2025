@@ -41,7 +41,7 @@ if not SECRET_KEY:
 
 # ALLOWED_HOSTS - include local IP for Watch simulator access
 _env_hosts = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1,0.0.0.0').split(',')
-ALLOWED_HOSTS = _env_hosts + ['192.168.100.27']
+ALLOWED_HOSTS = _env_hosts + ['192.168.100.27', '192.168.100.236', '10.255.110.131', '172.20.10.4', '10.120.22.163']
 
 
 # Application definition

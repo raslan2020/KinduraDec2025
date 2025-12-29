@@ -133,11 +133,13 @@ class BiomarkersRepository {
     String? notes,
   }) async {
     try {
+      // Format date as YYYY-MM-DD (backend expects this format)
+      final dateStr = '${collectedAt.year.toString().padLeft(4, '0')}-${collectedAt.month.toString().padLeft(2, '0')}-${collectedAt.day.toString().padLeft(2, '0')}';
       final data = {
         'biomarker_id': biomarkerId,
         'value': value,
         'unit': unit,
-        'collected_at': collectedAt.toIso8601String(),
+        'collected_at': dateStr,
         if (notes != null) 'notes': notes,
       };
 
@@ -465,6 +467,56 @@ class BiomarkersRepository {
         return ApiResponse.completed(insightsGenerated);
       } else {
         return ApiResponse.error(response['message'] ?? 'Failed to regenerate insights');
+      }
+    } catch (e) {
+      return ApiResponse.error(e.toString());
+    }
+  }
+
+  // ======== OBSERVATION CRUD METHODS ========
+
+  /// Update an existing observation
+  Future<ApiResponse<void>> updateObservation({
+    required String observationId,
+    required double value,
+    required DateTime collectedAt,
+    String? notes,
+  }) async {
+    try {
+      // Format date as YYYY-MM-DD (backend expects this format)
+      final dateStr = '${collectedAt.year.toString().padLeft(4, '0')}-${collectedAt.month.toString().padLeft(2, '0')}-${collectedAt.day.toString().padLeft(2, '0')}';
+      final data = {
+        'value_num': value,
+        'collected_at': dateStr,
+        if (notes != null) 'notes': notes,
+      };
+
+      final response = await _apiService.patchApi(
+        data,
+        '${AppUrl.baseUrl}/biomarkers/observations/$observationId/',
+      );
+
+      if (response['status'] == true) {
+        return ApiResponse.completed(null);
+      } else {
+        return ApiResponse.error(response['message'] ?? 'Failed to update observation');
+      }
+    } catch (e) {
+      return ApiResponse.error(e.toString());
+    }
+  }
+
+  /// Delete an observation
+  Future<ApiResponse<void>> deleteObservation(String observationId) async {
+    try {
+      final response = await _apiService.deleteApi(
+        '${AppUrl.baseUrl}/biomarkers/observations/$observationId/',
+      );
+
+      if (response['status'] == true) {
+        return ApiResponse.completed(null);
+      } else {
+        return ApiResponse.error(response['message'] ?? 'Failed to delete observation');
       }
     } catch (e) {
       return ApiResponse.error(e.toString());

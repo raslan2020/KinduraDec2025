@@ -1,0 +1,104 @@
+{
+  "source": "/Users/ralabaji/Kinduraios/watchos/KinduraWatch/ContentView.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Vitals",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 44
+        }
+      },
+      {
+        "comment": "",
+        "key": "Sleep",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 101
+        }
+      },
+      {
+        "comment": "",
+        "key": "Last Night",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 108
+        }
+      },
+      {
+        "comment": "",
+        "key": "--",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 117
+        }
+      },
+      {
+        "comment": "",
+        "key": "Monitoring",
+        "location": {
+          "startingColumn": 66,
+          "startingLine": 153
+        }
+      },
+      {
+        "comment": "",
+        "key": "Not Active",
+        "location": {
+          "startingColumn": 81,
+          "startingLine": 153
+        }
+      },
+      {
+        "comment": "",
+        "key": "No falls detected",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 244
+        }
+      },
+      {
+        "comment": "",
+        "key": "Fall Detection",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 174
+        }
+      },
+      {
+        "comment": "",
+        "key": "Current G-Force",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 181
+        }
+      },
+      {
+        "comment": "",
+        "key": "Recent Events (%lld)",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 212
+        }
+      },
+      {
+        "comment": "",
+        "key": "•",
+        "location": {
+          "startingColumn": 46,
+          "startingLine": 228
+        }
+      },
+      {
+        "comment": "",
+        "key": "Send SOS",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 256
+        }
+      }
+    ]
+  },
+  "version": 1
+}

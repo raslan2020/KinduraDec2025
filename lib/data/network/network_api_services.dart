@@ -1,3 +1,40 @@
+/// ============================================================================
+/// NETWORK API SERVICES
+/// ============================================================================
+/// Central HTTP client for all API communication with the Django backend.
+///
+/// This class handles:
+/// - All HTTP methods (GET, POST, PUT, PATCH, DELETE)
+/// - File uploads (multipart/form-data)
+/// - Authentication header injection
+/// - Error handling and response parsing
+/// - Performance monitoring and logging
+///
+/// Usage Pattern:
+/// ```dart
+/// final api = NetworkApiServices();
+///
+/// // GET request
+/// final response = await api.getApi(AppUrl.medicationsUrl);
+///
+/// // POST request (NOTE: data comes BEFORE url)
+/// final response = await api.postApi({'name': 'value'}, AppUrl.loginUrl);
+///
+/// // File upload
+/// final response = await api.uploadFileApi(file, AppUrl.uploadUrl);
+/// ```
+///
+/// IMPORTANT: Parameter order is data, then url (not url, then data!)
+///
+/// Authentication:
+/// - Token is automatically added from UserPreferences
+/// - Can be overridden with explicit token parameter
+/// - Set requireAuth: false for public endpoints (login, signup)
+///
+/// @see lib/data/network/base_api_services.dart for interface definition
+/// @see lib/res/app_url/app_url.dart for endpoint URLs
+/// ============================================================================
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -9,24 +46,47 @@ import 'package:kindura_ai/user_preference/user_preferences_view_model.dart';
 import 'package:kindura_ai/utils/performance_monitor.dart';
 import 'package:kindura_ai/utils/file_logger.dart';
 
+/// HTTP client implementation for REST API communication.
+///
+/// All repositories should use this class for network requests.
+/// Handles authentication, error handling, and logging automatically.
 class NetworkApiServices extends BaseApiServices {
+  /// Access to stored authentication token
   UserPreferences userPreferences = UserPreferences();
+
+  /// Performance monitoring for API timing
   final PerformanceMonitor _monitor = PerformanceMonitor();
+
+  /// Builds HTTP headers for API requests.
+  ///
+  /// Authentication Logic:
+  /// 1. If explicit [token] provided, use it
+  /// 2. If [requireAuth] is true and no token, fetch from UserPreferences
+  /// 3. If [requireAuth] is false, skip authentication (for login/signup)
+  ///
+  /// Headers always include:
+  /// - Content-Type: application/json
+  /// - Accept: application/json
+  /// - Authorization: Token {token} (when authenticated)
   Future<Map<String, String>> buildHeaders({
     String? token,
     bool requireAuth = true,
   }) async {
     String? finalToken = token;
 
+    // Auto-fetch token from storage if not provided and auth required
     if (requireAuth && (finalToken == null || finalToken.isEmpty)) {
       finalToken = await userPreferences.getToken();
     }
 
+    // Base headers for JSON API
     final headers = {
       "Content-Type": "application/json",
       "Accept": "application/json",
     };
 
+    // Add authentication header if token available
+    // Format: "Token abc123..." (Django Token Authentication)
     if (finalToken != null && finalToken.isNotEmpty) {
       headers["Authorization"] = "Token $finalToken";
     }

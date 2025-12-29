@@ -37,6 +37,7 @@ from medical_reports.biomarker_views import (
     get_biomarker_categories,
     get_biomarker_detail,
     add_manual_observation,
+    observation_detail,  # Combined update/delete handler
     get_labs_summary,
     get_health_insights,
     dismiss_insight,
@@ -141,6 +142,7 @@ urlpatterns = [
     path('api/biomarkers/summary/', get_labs_summary, name='biomarkers-summary'),
     path('api/biomarkers/categories/', get_biomarker_categories, name='biomarkers-categories'),
     path('api/biomarkers/observations/manual/', add_manual_observation, name='add-manual-observation'),
+    path('api/biomarkers/observations/<str:observation_id>/', observation_detail, name='observation-detail'),
     path('api/biomarkers/insights/', get_health_insights, name='health-insights'),
     path('api/biomarkers/insights/<str:insight_id>/dismiss/', dismiss_insight, name='dismiss-insight'),
     # Stored AI-generated health insights (auto-generated when reports are uploaded)

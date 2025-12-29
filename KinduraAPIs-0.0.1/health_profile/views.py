@@ -40,15 +40,16 @@ class HealthProfileViewSet(viewsets.ViewSet):
                 else:
                     return error_response("Health profile not found", status.HTTP_404_NOT_FOUND)
             except Exception as e:
-                return error_response(str(e), status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
+                logger.error("Error fetching health profile: %s", e)
+                return error_response("Failed to fetch health profile", status.HTTP_500_INTERNAL_SERVER_ERROR)
+
         elif request.method == 'POST':
             try:
                 # Check if profile already exists
                 existing_profile = self.get_queryset().first()
                 if existing_profile:
                     return error_response("Health profile already exists. Use PUT to update.", status.HTTP_400_BAD_REQUEST)
-                
+
                 serializer = HealthProfileSerializer(data=request.data)
                 if serializer.is_valid():
                     health_profile = serializer.save(user=request.user)
@@ -60,7 +61,8 @@ class HealthProfileViewSet(viewsets.ViewSet):
                 else:
                     return error_response(serializer.errors, status.HTTP_400_BAD_REQUEST)
             except Exception as e:
-                return error_response(str(e), status.HTTP_500_INTERNAL_SERVER_ERROR)
+                logger.error("Error creating health profile: %s", e)
+                return error_response("Failed to create health profile", status.HTTP_500_INTERNAL_SERVER_ERROR)
         
         elif request.method == 'PUT':
             try:
@@ -90,7 +92,8 @@ class HealthProfileViewSet(viewsets.ViewSet):
                     else:
                         return error_response(serializer.errors, status.HTTP_400_BAD_REQUEST)
             except Exception as e:
-                return error_response(str(e), status.HTTP_500_INTERNAL_SERVER_ERROR)
+                logger.error("Error updating health profile: %s", e)
+                return error_response("Failed to update health profile", status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class WatchVitalsView(APIView):
@@ -134,6 +137,8 @@ class WatchVitalsView(APIView):
             summary = {
                 'heart_rate': latest_vitals.heart_rate,
                 'blood_oxygen': latest_vitals.blood_oxygen,
+                'hrv': latest_vitals.hrv or 0,
+                'respiratory_rate': latest_vitals.respiratory_rate or 0,
                 'sleep_hours': latest_vitals.total_sleep_hours or 0,
                 'awakenings': latest_vitals.awakenings_count,
                 'sleep_quality': latest_vitals.sleep_quality_computed or latest_vitals.sleep_quality or 'unknown',
@@ -145,7 +150,8 @@ class WatchVitalsView(APIView):
             return success_response(summary)
 
         except Exception as e:
-            return error_response(str(e), status.HTTP_500_INTERNAL_SERVER_ERROR)
+            logger.error("Error fetching watch vitals: %s", e)
+            return error_response("Failed to fetch watch vitals", status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def post(self, request):
         """Store new vitals from Watch"""
@@ -160,61 +166,50 @@ class WatchVitalsView(APIView):
                 )
             return error_response(serializer.errors, status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            return error_response(str(e), status.HTTP_500_INTERNAL_SERVER_ERROR)
+            logger.error("Error saving watch vitals: %s", e)
+            return error_response("Failed to save watch vitals", status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class WatchVitalsDevView(APIView):
     """
-    Development endpoint for Watch vitals - no authentication required
-    Used for simulator testing where Watch can't share tokens with iPhone
+    Development endpoint for Watch vitals - NOW REQUIRES AUTHENTICATION
+    Used for Watch app testing with proper token authentication
     """
-    authentication_classes = []
-    permission_classes = []
+    authentication_classes = [SimpleTokenAuthentication]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        """Store vitals from Watch simulator (development only)"""
+        """Store vitals from Watch app (requires authentication)"""
         try:
-            # For development, allow specifying user via email parameter
-            from users.models import User
-            user_email = request.data.get('user_email')
-
-            if user_email:
-                user = User.objects.filter(email=user_email).first()
-                if not user:
-                    return error_response(f"User with email {user_email} not found", status.HTTP_400_BAD_REQUEST)
-            else:
-                # Default to first user if no email specified
-                user = User.objects.first()
-
-            if not user:
-                return error_response("No user found in database", status.HTTP_400_BAD_REQUEST)
+            # Use authenticated user from token
+            user = request.user
 
             serializer = WatchVitalsSerializer(data=request.data)
             if serializer.is_valid():
                 vitals = serializer.save(user=user)
                 logger.info("Watch vitals saved for %s: HR=%s, O2=%s", user.email, vitals.heart_rate, vitals.blood_oxygen)
 
-                # Broadcast to WebSocket clients
+                # Broadcast to user-specific WebSocket channel (security fix)
                 channel_layer = get_channel_layer()
                 vitals_data = WatchVitalsSerializer(vitals).data
                 async_to_sync(channel_layer.group_send)(
-                    'watch_vitals',
+                    f'user_{user.id}_vitals',
                     {
                         'type': 'watch_vitals_update',
                         'vitals': vitals_data
                     }
                 )
-                logger.debug("Broadcasted vitals via WebSocket")
+                logger.debug("Broadcasted vitals via WebSocket to user %s", user.id)
 
                 return success_response(
                     vitals_data,
-                    "Watch vitals saved successfully (dev mode)",
+                    "Watch vitals saved successfully",
                     status.HTTP_201_CREATED
                 )
             return error_response(serializer.errors, status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             logger.error("Error saving watch vitals: %s", e)
-            return error_response(str(e), status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return error_response("Failed to save vitals", status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class WatchVitalsHistoryView(APIView):
@@ -238,4 +233,5 @@ class WatchVitalsHistoryView(APIView):
             serializer = WatchVitalsSerializer(vitals, many=True)
             return success_response(serializer.data)
         except Exception as e:
-            return error_response(str(e), status.HTTP_500_INTERNAL_SERVER_ERROR)
+            logger.error("Error fetching vitals history: %s", e)
+            return error_response("Failed to fetch vitals history", status.HTTP_500_INTERNAL_SERVER_ERROR)

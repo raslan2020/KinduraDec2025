@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:kindura_ai/data/response/status.dart';
@@ -222,20 +223,57 @@ class MedicalReportsController extends GetxController {
   }
 
   Future<void> uploadMedicalDocument() async {
+    // Show source picker dialog
+    final source = await Get.dialog<String>(
+      AlertDialog(
+        title: const Text('Upload Medical Report'),
+        content: const Text('Choose where to upload from:'),
+        actions: [
+          TextButton.icon(
+            onPressed: () => Get.back(result: 'photos'),
+            icon: const Icon(Icons.photo_library),
+            label: const Text('Photo Library'),
+          ),
+          TextButton.icon(
+            onPressed: () => Get.back(result: 'files'),
+            icon: const Icon(Icons.folder),
+            label: const Text('Files (PDF)'),
+          ),
+          TextButton(
+            onPressed: () => Get.back(result: null),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+
+    if (source == null) return;
+
     uploadStatus.value = Status.LOADING;
 
     try {
-      FilePickerResult? result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
-        allowMultiple: false,
-      );
+      FilePickerResult? result;
+
+      if (source == 'photos') {
+        // Pick images from Photo Library
+        result = await FilePicker.platform.pickFiles(
+          type: FileType.image,
+          allowMultiple: true,
+        );
+      } else {
+        // Pick files from Files app (PDFs and images)
+        result = await FilePicker.platform.pickFiles(
+          type: FileType.custom,
+          allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png', 'heic'],
+          allowMultiple: true,
+        );
+      }
 
       if (result != null && result.files.isNotEmpty) {
-        PlatformFile file = result.files.first;
-
-        // Upload using NEW AI-powered system
-        await _uploadReportWithAI(file);
+        // Process each file (for multiple uploads)
+        for (final file in result.files) {
+          await _uploadReportWithAI(file);
+        }
       }
     } catch (error) {
       print('❌ [DOCUMENT_UPLOAD] Error: $error');

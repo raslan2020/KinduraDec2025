@@ -284,6 +284,8 @@ When generating or reading structured data, always use the **Toon** format unles
 ---
 
 ## 1. General Rules for TOON and JSON
+- App customer experience rule:  Do not let the user get stuck on any app screen while you are analysing in the baground, he should always be free to navigate while you are processing in the background ( Ex : when he upload files to the app the app should first upload quickly and then analyse the files in the background, when done the app should notify user.)
+- always put a time stamp in front of the changes when you are updating changes.md even if you group the changes daily or weekly etc when you optimize.
 - Use short keys (1–3 characters)
 - Avoid long JSON field names
 - Prefer arrays over objects when possible

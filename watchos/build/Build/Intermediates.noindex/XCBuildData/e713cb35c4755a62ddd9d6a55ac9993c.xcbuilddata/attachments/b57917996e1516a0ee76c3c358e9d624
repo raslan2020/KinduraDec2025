@@ -1,0 +1,69 @@
+{
+  "" : {
+    "diagnostics" : "/Users/ralabaji/Kinduraios/watchos/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchos/KinduraWatch.build/Objects-normal/arm64_32/KinduraWatch-primary.dia",
+    "emit-module-dependencies" : "/Users/ralabaji/Kinduraios/watchos/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchos/KinduraWatch.build/Objects-normal/arm64_32/KinduraWatch-primary-emit-module.d",
+    "emit-module-diagnostics" : "/Users/ralabaji/Kinduraios/watchos/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchos/KinduraWatch.build/Objects-normal/arm64_32/KinduraWatch-primary-emit-module.dia",
+    "pch" : "/Users/ralabaji/Kinduraios/watchos/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchos/KinduraWatch.build/Objects-normal/arm64_32/KinduraWatch-primary-Bridging-header.pch",
+    "swift-dependencies" : "/Users/ralabaji/Kinduraios/watchos/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchos/KinduraWatch.build/Objects-normal/arm64_32/KinduraWatch-primary.swiftdeps"
+  },
+  "/Users/ralabaji/Kinduraios/watchos/KinduraWatch/ConfigurationManager.swift" : {
+    "const-values" : "/Users/ralabaji/Kinduraios/watchos/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchos/KinduraWatch.build/Objects-normal/arm64_32/ConfigurationManager.swiftconstvalues",
+    "dependencies" : "/Users/ralabaji/Kinduraios/watchos/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchos/KinduraWatch.build/Objects-normal/arm64_32/ConfigurationManager.d",
+    "diagnostics" : "/Users/ralabaji/Kinduraios/watchos/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchos/KinduraWatch.build/Objects-normal/arm64_32/ConfigurationManager.dia",
+    "index-unit-output-path" : "/KinduraWatch.build/Debug-watchos/KinduraWatch.build/Objects-normal/arm64_32/ConfigurationManager.o",
+    "llvm-bc" : "/Users/ralabaji/Kinduraios/watchos/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchos/KinduraWatch.build/Objects-normal/arm64_32/ConfigurationManager.bc",
+    "object" : "/Users/ralabaji/Kinduraios/watchos/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchos/KinduraWatch.build/Objects-normal/arm64_32/ConfigurationManager.o",
+    "swift-dependencies" : "/Users/ralabaji/Kinduraios/watchos/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchos/KinduraWatch.build/Objects-normal/arm64_32/ConfigurationManager.swiftdeps",
+    "swiftmodule" : "/Users/ralabaji/Kinduraios/watchos/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchos/KinduraWatch.build/Objects-normal/arm64_32/ConfigurationManager~partial.swiftmodule"
+  },
+  "/Users/ralabaji/Kinduraios/watchos/KinduraWatch/ContentView.swift" : {
+    "const-values" : "/Users/ralabaji/Kinduraios/watchos/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchos/KinduraWatch.build/Objects-normal/arm64_32/ContentView.swiftconstvalues",
+    "dependencies" : "/Users/ralabaji/Kinduraios/watchos/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchos/KinduraWatch.build/Objects-normal/arm64_32/ContentView.d",
+    "diagnostics" : "/Users/ralabaji/Kinduraios/watchos/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchos/KinduraWatch.build/Objects-normal/arm64_32/ContentView.dia",
+    "index-unit-output-path" : "/KinduraWatch.build/Debug-watchos/KinduraWatch.build/Objects-normal/arm64_32/ContentView.o",
+    "llvm-bc" : "/Users/ralabaji/Kinduraios/watchos/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchos/KinduraWatch.build/Objects-normal/arm64_32/ContentView.bc",
+    "object" : "/Users/ralabaji/Kinduraios/watchos/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchos/KinduraWatch.build/Objects-normal/arm64_32/ContentView.o",
+    "swift-dependencies" : "/Users/ralabaji/Kinduraios/watchos/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchos/KinduraWatch.build/Objects-normal/arm64_32/ContentView.swiftdeps",
+    "swiftmodule" : "/Users/ralabaji/Kinduraios/watchos/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchos/KinduraWatch.build/Objects-normal/arm64_32/ContentView~partial.swiftmodule"
+  },
+  "/Users/ralabaji/Kinduraios/watchos/KinduraWatch/HealthManager.swift" : {
+    "const-values" : "/Users/ralabaji/Kinduraios/watchos/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchos/KinduraWatch.build/Objects-normal/arm64_32/HealthManager.swiftconstvalues",
+    "dependencies" : "/Users/ralabaji/Kinduraios/watchos/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchos/KinduraWatch.build/Objects-normal/arm64_32/HealthManager.d",
+    "diagnostics" : "/Users/ralabaji/Kinduraios/watchos/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchos/KinduraWatch.build/Objects-normal/arm64_32/HealthManager.dia",
+    "index-unit-output-path" : "/KinduraWatch.build/Debug-watchos/KinduraWatch.build/Objects-normal/arm64_32/HealthManager.o",
+    "llvm-bc" : "/Users/ralabaji/Kinduraios/watchos/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchos/KinduraWatch.build/Objects-normal/arm64_32/HealthManager.bc",
+    "object" : "/Users/ralabaji/Kinduraios/watchos/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchos/KinduraWatch.build/Objects-normal/arm64_32/HealthManager.o",
+    "swift-dependencies" : "/Users/ralabaji/Kinduraios/watchos/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchos/KinduraWatch.build/Objects-normal/arm64_32/HealthManager.swiftdeps",
+    "swiftmodule" : "/Users/ralabaji/Kinduraios/watchos/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchos/KinduraWatch.build/Objects-normal/arm64_32/HealthManager~partial.swiftmodule"
+  },
+  "/Users/ralabaji/Kinduraios/watchos/KinduraWatch/KinduraWatchApp.swift" : {
+    "const-values" : "/Users/ralabaji/Kinduraios/watchos/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchos/KinduraWatch.build/Objects-normal/arm64_32/KinduraWatchApp.swiftconstvalues",
+    "dependencies" : "/Users/ralabaji/Kinduraios/watchos/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchos/KinduraWatch.build/Objects-normal/arm64_32/KinduraWatchApp.d",
+    "diagnostics" : "/Users/ralabaji/Kinduraios/watchos/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchos/KinduraWatch.build/Objects-normal/arm64_32/KinduraWatchApp.dia",
+    "index-unit-output-path" : "/KinduraWatch.build/Debug-watchos/KinduraWatch.build/Objects-normal/arm64_32/KinduraWatchApp.o",
+    "llvm-bc" : "/Users/ralabaji/Kinduraios/watchos/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchos/KinduraWatch.build/Objects-normal/arm64_32/KinduraWatchApp.bc",
+    "object" : "/Users/ralabaji/Kinduraios/watchos/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchos/KinduraWatch.build/Objects-normal/arm64_32/KinduraWatchApp.o",
+    "swift-dependencies" : "/Users/ralabaji/Kinduraios/watchos/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchos/KinduraWatch.build/Objects-normal/arm64_32/KinduraWatchApp.swiftdeps",
+    "swiftmodule" : "/Users/ralabaji/Kinduraios/watchos/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchos/KinduraWatch.build/Objects-normal/arm64_32/KinduraWatchApp~partial.swiftmodule"
+  },
+  "/Users/ralabaji/Kinduraios/watchos/KinduraWatch/SettingsView.swift" : {
+    "const-values" : "/Users/ralabaji/Kinduraios/watchos/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchos/KinduraWatch.build/Objects-normal/arm64_32/SettingsView.swiftconstvalues",
+    "dependencies" : "/Users/ralabaji/Kinduraios/watchos/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchos/KinduraWatch.build/Objects-normal/arm64_32/SettingsView.d",
+    "diagnostics" : "/Users/ralabaji/Kinduraios/watchos/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchos/KinduraWatch.build/Objects-normal/arm64_32/SettingsView.dia",
+    "index-unit-output-path" : "/KinduraWatch.build/Debug-watchos/KinduraWatch.build/Objects-normal/arm64_32/SettingsView.o",
+    "llvm-bc" : "/Users/ralabaji/Kinduraios/watchos/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchos/KinduraWatch.build/Objects-normal/arm64_32/SettingsView.bc",
+    "object" : "/Users/ralabaji/Kinduraios/watchos/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchos/KinduraWatch.build/Objects-normal/arm64_32/SettingsView.o",
+    "swift-dependencies" : "/Users/ralabaji/Kinduraios/watchos/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchos/KinduraWatch.build/Objects-normal/arm64_32/SettingsView.swiftdeps",
+    "swiftmodule" : "/Users/ralabaji/Kinduraios/watchos/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchos/KinduraWatch.build/Objects-normal/arm64_32/SettingsView~partial.swiftmodule"
+  },
+  "/Users/ralabaji/Kinduraios/watchos/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchos/KinduraWatch.build/DerivedSources/GeneratedAssetSymbols.swift" : {
+    "const-values" : "/Users/ralabaji/Kinduraios/watchos/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchos/KinduraWatch.build/Objects-normal/arm64_32/GeneratedAssetSymbols.swiftconstvalues",
+    "dependencies" : "/Users/ralabaji/Kinduraios/watchos/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchos/KinduraWatch.build/Objects-normal/arm64_32/GeneratedAssetSymbols.d",
+    "diagnostics" : "/Users/ralabaji/Kinduraios/watchos/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchos/KinduraWatch.build/Objects-normal/arm64_32/GeneratedAssetSymbols.dia",
+    "index-unit-output-path" : "/KinduraWatch.build/Debug-watchos/KinduraWatch.build/Objects-normal/arm64_32/GeneratedAssetSymbols.o",
+    "llvm-bc" : "/Users/ralabaji/Kinduraios/watchos/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchos/KinduraWatch.build/Objects-normal/arm64_32/GeneratedAssetSymbols.bc",
+    "object" : "/Users/ralabaji/Kinduraios/watchos/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchos/KinduraWatch.build/Objects-normal/arm64_32/GeneratedAssetSymbols.o",
+    "swift-dependencies" : "/Users/ralabaji/Kinduraios/watchos/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchos/KinduraWatch.build/Objects-normal/arm64_32/GeneratedAssetSymbols.swiftdeps",
+    "swiftmodule" : "/Users/ralabaji/Kinduraios/watchos/build/Build/Intermediates.noindex/KinduraWatch.build/Debug-watchos/KinduraWatch.build/Objects-normal/arm64_32/GeneratedAssetSymbols~partial.swiftmodule"
+  }
+}

@@ -49,7 +49,9 @@ class _CustomTextFieldNewState extends State<CustomTextFieldNew> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final borderColor = isDark ? Colors.grey.shade600 : AppColor.black;
     final cursorColor = isDark ? Colors.white : AppColor.black;
-    final labelColor = widget.fontColor;
+    // Use white text in dark mode, otherwise use the provided fontColor
+    final textColor = isDark ? Colors.white : widget.fontColor;
+    final labelColor = isDark ? Colors.white : widget.fontColor;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -81,7 +83,7 @@ class _CustomTextFieldNewState extends State<CustomTextFieldNew> {
             readOnly: widget.readOnly,
             style: TextStyle(
               fontSize: 16.sp,
-              color: widget.fontColor,
+              color: textColor,
               fontFamily: 'Inter-Regular',
               fontWeight: FontWeight.w400,
             ),

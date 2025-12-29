@@ -43,30 +43,51 @@ void main() async {
 
   // Initialize file logger for debugging and error tracking
   // Logs are stored in the app's documents directory
-  await FileLogger.initialize();
-  await FileLogger.logAppLifecycle('App Started');
+  try {
+    await FileLogger.initialize();
+    await FileLogger.logAppLifecycle('App Started');
+  } catch (e) {
+    print('FileLogger initialization failed: $e');
+  }
 
   // =========================================================================
-  // DEPENDENCY INJECTION
+  // DEPENDENCY INJECTION - WITH ERROR HANDLING
   // =========================================================================
   // Register core services as singletons using GetX.
   // permanent: true ensures they persist throughout app lifecycle.
   //
-  // These services are available anywhere via Get.find<ServiceType>()
+  // Each service is wrapped in try-catch to prevent app crashes
   // =========================================================================
 
   // ThemeService: Manages dark/light mode switching
-  Get.put(ThemeService(), permanent: true);
+  try {
+    Get.put(ThemeService(), permanent: true);
+  } catch (e) {
+    print('ThemeService initialization failed: $e');
+  }
 
   // NotificationService: Handles local push notifications for medication reminders
-  Get.put(NotificationService(), permanent: true);
+  try {
+    Get.put(NotificationService(), permanent: true);
+  } catch (e) {
+    print('NotificationService initialization failed: $e');
+  }
 
   // VoiceService: Manages speech recognition for "Hey Kindura" trigger
-  Get.put(VoiceService(), permanent: true);
+  try {
+    Get.put(VoiceService(), permanent: true);
+  } catch (e) {
+    print('VoiceService initialization failed: $e');
+  }
 
   // HomeController: Central controller for dashboard and LiveKit voice connection
   // Registered early because the mic button in bottom navigation needs it
-  Get.put(HomeController(), permanent: true);
+  // This controller now handles backend connection failures gracefully
+  try {
+    Get.put(HomeController(), permanent: true);
+  } catch (e) {
+    print('HomeController initialization failed: $e');
+  }
 
   runApp(const MyApp());
 }

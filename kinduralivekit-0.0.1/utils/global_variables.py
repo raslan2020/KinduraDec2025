@@ -1,3 +1,42 @@
+"""
+=============================================================================
+KINDURA AI VOICE AGENT - GLOBAL VARIABLES
+=============================================================================
+Configuration and prompts for the LiveKit voice agent.
+
+This file contains:
+1. greeting_msg_language: Multi-language greetings (50+ languages)
+2. agent_prompt: The main system prompt that defines agent behavior
+3. BASE_URL: API endpoint configuration
+
+Agent Behavior:
+- The agent uses OpenAI GPT-4o-mini for conversation
+- It has access to function tools for:
+  - Reading medication lists and status
+  - Saving health observations (sleep, mood, symptoms)
+  - Retrieving lab results and biomarkers
+  - Getting watch vitals data
+
+IMPORTANT - Medication Restrictions:
+- The agent CANNOT mark medications as taken/missed
+- This was a deliberate safety decision
+- Users must update medication status via the app UI
+- This prevents accidental/incorrect medication tracking
+
+Prompt Placeholders:
+- {patient_name}: User's first name
+- {medicines}: JSON list of medications
+- {schedules}: Medication schedules
+- {current_time}: Current system time
+- {medical_reports_summary}: Recent lab reports
+- {watch_vitals_summary}: Apple Watch data
+- {contacts_summary}: Emergency contacts
+
+@see agent.py for how these are used
+@see /docs/DEVELOPER_GUIDE.md for full documentation
+=============================================================================
+"""
+
 greeting_msg_language = {
     "ar": "مرحبًا، كيف حالك اليوم؟",
     "ar-LB": "مرحبا، كيفك اليوم؟",  # Lebanese Arabic

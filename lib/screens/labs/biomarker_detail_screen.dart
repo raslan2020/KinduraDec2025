@@ -41,20 +41,35 @@ class _BiomarkerDetailScreenState extends State<BiomarkerDetailScreen> with Tick
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final backgroundColor = isDark ? const Color(0xFF0F172A) : Colors.white;
+    final appBarColor = isDark ? const Color(0xFF1E293B) : Colors.white;
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final tabBarColor = isDark ? const Color(0xFF1E293B) : Colors.white;
+
     if (biomarker == null) {
       return Scaffold(
-        appBar: AppBar(title: Text('Biomarker Detail')),
-        body: Center(child: Text('Biomarker not found')),
+        backgroundColor: backgroundColor,
+        appBar: AppBar(
+          title: Text('Biomarker Detail', style: TextStyle(color: textColor)),
+          backgroundColor: appBarColor,
+          iconTheme: IconThemeData(color: textColor),
+        ),
+        body: Center(child: Text('Biomarker not found', style: TextStyle(color: textColor))),
       );
     }
 
     return Scaffold(
+      backgroundColor: backgroundColor,
       appBar: AppBar(
-        title: Text(biomarker!.definition.name),
+        title: Text(biomarker!.definition.name, style: TextStyle(color: textColor)),
+        backgroundColor: appBarColor,
+        elevation: isDark ? 0 : 1,
+        iconTheme: IconThemeData(color: textColor),
         actions: [
           IconButton(
             onPressed: () => _showAddValueDialog(),
-            icon: Icon(Icons.add),
+            icon: Icon(Icons.add, color: textColor),
           ),
           PopupMenuButton<String>(
             onSelected: (value) {
@@ -83,12 +98,12 @@ class _BiomarkerDetailScreenState extends State<BiomarkerDetailScreen> with Tick
         children: [
           // Current value header
           _buildCurrentValueHeader(),
-          
+
           // Tab bar
           Container(
             decoration: BoxDecoration(
-              color: Colors.white,
-              boxShadow: [
+              color: tabBarColor,
+              boxShadow: isDark ? null : [
                 BoxShadow(
                   color: Colors.grey.shade200,
                   blurRadius: 2,
@@ -98,6 +113,9 @@ class _BiomarkerDetailScreenState extends State<BiomarkerDetailScreen> with Tick
             ),
             child: TabBar(
               controller: _tabController,
+              labelColor: isDark ? Colors.white : Colors.blue,
+              unselectedLabelColor: isDark ? Colors.grey[400] : Colors.grey[600],
+              indicatorColor: Colors.blue,
               tabs: [
                 Tab(text: 'Timeline'),
                 Tab(text: 'Insights'),
@@ -105,15 +123,15 @@ class _BiomarkerDetailScreenState extends State<BiomarkerDetailScreen> with Tick
               ],
             ),
           ),
-          
+
           // Tab views
           Expanded(
             child: TabBarView(
               controller: _tabController,
               children: [
-                _buildTimelineTab(),
-                _buildInsightsTab(),
-                _buildAboutTab(),
+                _buildTimelineTab(context),
+                _buildInsightsTab(context),
+                _buildAboutTab(context),
               ],
             ),
           ),
@@ -261,12 +279,16 @@ class _BiomarkerDetailScreenState extends State<BiomarkerDetailScreen> with Tick
     });
   }
 
-  Widget _buildTimelineTab() {
+  Widget _buildTimelineTab(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardBg = isDark ? const Color(0xFF1E293B) : Colors.white;
+    final borderColor = isDark ? Colors.grey[700]! : Colors.grey.shade300;
+
     return Obx(() {
       final selectedBiomarker = controller.selectedBiomarker.value ?? biomarker!;
-      
+
       if (!selectedBiomarker.hasData) {
-        return _buildEmptyState();
+        return _buildEmptyState(context);
       }
 
       return SingleChildScrollView(
@@ -278,71 +300,76 @@ class _BiomarkerDetailScreenState extends State<BiomarkerDetailScreen> with Tick
               height: 300,
               padding: EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: cardBg,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.grey.shade300),
+                border: Border.all(color: borderColor),
               ),
-              child: _buildTimelineChart(selectedBiomarker),
+              child: _buildTimelineChart(context, selectedBiomarker),
             ),
-            
+
             SizedBox(height: 20),
-            
+
             // Observations list
-            _buildObservationsList(selectedBiomarker),
+            _buildObservationsList(context, selectedBiomarker),
           ],
         ),
       );
     });
   }
 
-  Widget _buildInsightsTab() {
+  Widget _buildInsightsTab(BuildContext context) {
     return SingleChildScrollView(
       padding: EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Reference range explanation
-          _buildReferenceRangeCard(),
-          
+          _buildReferenceRangeCard(context),
+
           SizedBox(height: 16),
-          
+
           // Clinical significance
-          _buildClinicalSignificanceCard(),
-          
+          _buildClinicalSignificanceCard(context),
+
           SizedBox(height: 16),
-          
+
           // Related insights
-          _buildRelatedInsightsCard(),
+          _buildRelatedInsightsCard(context),
         ],
       ),
     );
   }
 
-  Widget _buildAboutTab() {
+  Widget _buildAboutTab(BuildContext context) {
     return SingleChildScrollView(
       padding: EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Basic information
-          _buildInfoCard(),
+          _buildInfoCard(context),
 
           SizedBox(height: 16),
 
           // Learn More section (AI-generated)
-          _buildLearnMoreCard(),
+          _buildLearnMoreCard(context),
 
           SizedBox(height: 16),
 
           // LOINC information
           if (biomarker!.definition.loincCode != null)
-            _buildLoincCard(),
+            _buildLoincCard(context),
         ],
       ),
     );
   }
 
-  Widget _buildLearnMoreCard() {
+  Widget _buildLearnMoreCard(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardBg = isDark ? const Color(0xFF1E293B) : Colors.white;
+    final borderColor = isDark ? Colors.grey[700]! : Colors.grey.shade300;
+    final textColor = isDark ? Colors.white : Colors.black87;
+
     return Obx(() {
       final aiInsights = controller.biomarkerAiInsights.value;
       final isLoading = controller.aiInsightsStatus.value == Status.LOADING;
@@ -351,9 +378,9 @@ class _BiomarkerDetailScreenState extends State<BiomarkerDetailScreen> with Tick
         return Container(
           padding: EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: cardBg,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.grey.shade300),
+            border: Border.all(color: borderColor),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -367,6 +394,7 @@ class _BiomarkerDetailScreenState extends State<BiomarkerDetailScreen> with Tick
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
+                      color: textColor,
                     ),
                   ),
                   Spacer(),
@@ -378,7 +406,7 @@ class _BiomarkerDetailScreenState extends State<BiomarkerDetailScreen> with Tick
                 ],
               ),
               SizedBox(height: 12),
-              _buildLoadingPlaceholder(),
+              _buildLoadingPlaceholder(context),
             ],
           ),
         );
@@ -393,9 +421,9 @@ class _BiomarkerDetailScreenState extends State<BiomarkerDetailScreen> with Tick
       return Container(
         padding: EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: cardBg,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.grey.shade300),
+          border: Border.all(color: borderColor),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -409,6 +437,7 @@ class _BiomarkerDetailScreenState extends State<BiomarkerDetailScreen> with Tick
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
+                    color: textColor,
                   ),
                 ),
               ],
@@ -590,7 +619,11 @@ class _BiomarkerDetailScreenState extends State<BiomarkerDetailScreen> with Tick
     );
   }
 
-  Widget _buildTimelineChart(BiomarkerWithTrend selectedBiomarker) {
+  Widget _buildTimelineChart(BuildContext context, BiomarkerWithTrend selectedBiomarker) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final gridColor = isDark ? Colors.grey[700]! : Colors.grey.shade200;
+    final textColor = isDark ? Colors.grey[400]! : Colors.grey.shade600;
+
     final observations = selectedBiomarker.recentObservations
         .where((obs) => obs.valueNum != null)
         .toList();
@@ -599,7 +632,7 @@ class _BiomarkerDetailScreenState extends State<BiomarkerDetailScreen> with Tick
       return Center(
         child: Text(
           'Need at least 2 measurements to show trend',
-          style: TextStyle(color: Colors.grey.shade600),
+          style: TextStyle(color: textColor),
         ),
       );
     }
@@ -642,7 +675,7 @@ class _BiomarkerDetailScreenState extends State<BiomarkerDetailScreen> with Tick
           horizontalInterval: interval,
           getDrawingHorizontalLine: (value) {
             return FlLine(
-              color: Colors.grey.shade200,
+              color: gridColor,
               strokeWidth: 1,
             );
           },
@@ -681,7 +714,7 @@ class _BiomarkerDetailScreenState extends State<BiomarkerDetailScreen> with Tick
                     value.toStringAsFixed(1),
                     style: TextStyle(
                       fontSize: 11,
-                      color: Colors.grey.shade600,
+                      color: textColor,
                       fontWeight: FontWeight.w500,
                     ),
                     textAlign: TextAlign.right,
@@ -707,7 +740,7 @@ class _BiomarkerDetailScreenState extends State<BiomarkerDetailScreen> with Tick
                       DateFormat('MM/dd/yy').format(date),
                       style: TextStyle(
                         fontSize: 10,
-                        color: isLatest ? Colors.blue.shade700 : Colors.grey.shade600,
+                        color: isLatest ? Colors.blue.shade700 : textColor,
                         fontWeight: isLatest ? FontWeight.bold : FontWeight.normal,
                       ),
                     ),
@@ -795,113 +828,152 @@ class _BiomarkerDetailScreenState extends State<BiomarkerDetailScreen> with Tick
     );
   }
 
-  Widget _buildObservationsList(BiomarkerWithTrend selectedBiomarker) {
+  Widget _buildObservationsList(BuildContext context, BiomarkerWithTrend selectedBiomarker) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardBg = isDark ? const Color(0xFF1E293B) : Colors.white;
+    final borderColor = isDark ? Colors.grey[700]! : Colors.grey.shade300;
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final subtitleColor = isDark ? Colors.grey[400] : Colors.grey.shade600;
+
     final observations = selectedBiomarker.recentObservations;
     observations.sort((a, b) => b.collectedAt.compareTo(a.collectedAt));
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Recent Measurements',
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Recent Measurements',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: textColor,
+              ),
+            ),
+            TextButton.icon(
+              onPressed: () => _showModifyDataDialog(context),
+              icon: Icon(Icons.edit, size: 16),
+              label: Text('Modify'),
+            ),
+          ],
         ),
-        
+
         SizedBox(height: 12),
-        
-        ...observations.map((observation) => Container(
-          margin: EdgeInsets.only(bottom: 8),
-          padding: EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.grey.shade300),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      observation.displayValue,
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: _getStatusColor(observation.status),
-                      ),
-                    ),
-                    
-                    Text(
-                      DateFormat('MMM dd, yyyy • HH:mm').format(observation.collectedAt),
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey.shade600,
-                      ),
-                    ),
-                    
-                    if (observation.notes != null) ...[
-                      SizedBox(height: 4),
+
+        ...observations.map((observation) => GestureDetector(
+          onTap: () => _showEditObservationDialog(context, observation),
+          child: Container(
+            margin: EdgeInsets.only(bottom: 8),
+            padding: EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: cardBg,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: borderColor),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                       Text(
-                        observation.notes!,
+                        observation.displayValue,
                         style: TextStyle(
-                          fontSize: 11,
-                          color: Colors.grey.shade500,
-                          fontStyle: FontStyle.italic,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: _getStatusColor(observation.status),
                         ),
                       ),
+
+                      Text(
+                        DateFormat('MMM dd, yyyy • HH:mm').format(observation.collectedAt),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: subtitleColor,
+                        ),
+                      ),
+
+                      if (observation.notes != null) ...[
+                        SizedBox(height: 4),
+                        Text(
+                          observation.notes!,
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: subtitleColor,
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ],
                     ],
-                  ],
-                ),
-              ),
-              
-              Container(
-                padding: EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                decoration: BoxDecoration(
-                  color: _getStatusColor(observation.status).withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  _getStatusText(observation.status),
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    color: _getStatusColor(observation.status),
                   ),
                 ),
-              ),
-            ],
+
+                Container(
+                  padding: EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: _getStatusColor(observation.status).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    _getStatusText(observation.status),
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: _getStatusColor(observation.status),
+                    ),
+                  ),
+                ),
+
+                SizedBox(width: 8),
+                Icon(Icons.chevron_right, color: subtitleColor, size: 20),
+              ],
+            ),
           ),
         )),
       ],
     );
   }
 
-  Widget _buildEmptyState() {
+  Widget _buildEmptyState(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textColor = isDark ? Colors.grey[400] : Colors.grey.shade600;
+    final subtitleColor = isDark ? Colors.grey[500] : Colors.grey.shade500;
+
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.timeline, size: 80, color: Colors.grey.shade400),
+          Icon(Icons.timeline, size: 80, color: textColor),
           SizedBox(height: 16),
           Text(
             'No measurements yet',
-            style: TextStyle(fontSize: 18, color: Colors.grey.shade600),
+            style: TextStyle(fontSize: 18, color: textColor),
           ),
           SizedBox(height: 8),
           Text(
             'Add your first measurement to see trends',
-            style: TextStyle(fontSize: 14, color: Colors.grey.shade500),
+            style: TextStyle(fontSize: 14, color: subtitleColor),
+          ),
+          SizedBox(height: 16),
+          ElevatedButton.icon(
+            onPressed: () => _showModifyDataDialog(context),
+            icon: Icon(Icons.add),
+            label: Text('Add Measurement'),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildReferenceRangeCard() {
+  Widget _buildReferenceRangeCard(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardBg = isDark ? const Color(0xFF1E293B) : Colors.white;
+    final borderColor = isDark ? Colors.grey[700]! : Colors.grey.shade300;
+    final textColor = isDark ? Colors.white : Colors.grey.shade800;
+    final subtitleColor = isDark ? Colors.grey[400] : Colors.grey.shade600;
+
     final latestObs = biomarker!.latestObservation;
     final hasRefRange = latestObs != null &&
         (latestObs.refLow != null || latestObs.refHigh != null);
@@ -909,9 +981,9 @@ class _BiomarkerDetailScreenState extends State<BiomarkerDetailScreen> with Tick
     return Container(
       padding: EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cardBg,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade300),
+        border: Border.all(color: borderColor),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -923,7 +995,7 @@ class _BiomarkerDetailScreenState extends State<BiomarkerDetailScreen> with Tick
                   'System references for a ${_getAgeGenderDescription()}',
                   style: TextStyle(
                     fontSize: 14,
-                    color: Colors.grey.shade600,
+                    color: subtitleColor,
                   ),
                 ),
               ),
@@ -962,7 +1034,7 @@ class _BiomarkerDetailScreenState extends State<BiomarkerDetailScreen> with Tick
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
-                      color: Colors.grey.shade800,
+                      color: textColor,
                     ),
                   ),
                 ),
@@ -970,7 +1042,7 @@ class _BiomarkerDetailScreenState extends State<BiomarkerDetailScreen> with Tick
                   '${latestObs.refLow?.toStringAsFixed(2) ?? '0.00'} — ${latestObs.refHigh?.toStringAsFixed(2) ?? '0.00'} ${latestObs.unitOriginal ?? ''}',
                   style: TextStyle(
                     fontSize: 14,
-                    color: Colors.grey.shade700,
+                    color: subtitleColor,
                   ),
                 ),
               ],
@@ -1082,7 +1154,13 @@ class _BiomarkerDetailScreenState extends State<BiomarkerDetailScreen> with Tick
     );
   }
 
-  Widget _buildClinicalSignificanceCard() {
+  Widget _buildClinicalSignificanceCard(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardBg = isDark ? const Color(0xFF1E293B) : Colors.white;
+    final borderColor = isDark ? Colors.grey[700]! : Colors.grey.shade300;
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final subtitleColor = isDark ? Colors.grey[400] : Colors.grey.shade700;
+
     return Obx(() {
       final aiInsights = controller.biomarkerAiInsights.value;
       final isLoading = controller.aiInsightsStatus.value == Status.LOADING;
@@ -1090,9 +1168,9 @@ class _BiomarkerDetailScreenState extends State<BiomarkerDetailScreen> with Tick
       return Container(
         padding: EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: cardBg,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.grey.shade300),
+          border: Border.all(color: borderColor),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1106,6 +1184,7 @@ class _BiomarkerDetailScreenState extends State<BiomarkerDetailScreen> with Tick
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
+                    color: textColor,
                   ),
                 ),
                 Spacer(),
@@ -1119,7 +1198,7 @@ class _BiomarkerDetailScreenState extends State<BiomarkerDetailScreen> with Tick
             ),
             SizedBox(height: 12),
             if (isLoading)
-              _buildLoadingPlaceholder()
+              _buildLoadingPlaceholder(context)
             else if (aiInsights != null) ...[
               // AI-generated summary
               Container(
@@ -1204,14 +1283,18 @@ class _BiomarkerDetailScreenState extends State<BiomarkerDetailScreen> with Tick
     }
   }
 
-  Widget _buildLoadingPlaceholder() {
+  Widget _buildLoadingPlaceholder(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final shimmerBg = isDark ? Colors.grey[700]! : Colors.grey.shade200;
+    final shimmerBgLight = isDark ? Colors.grey[600]! : Colors.grey.shade100;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
           height: 60,
           decoration: BoxDecoration(
-            color: Colors.grey.shade200,
+            color: shimmerBg,
             borderRadius: BorderRadius.circular(8),
           ),
         ),
@@ -1220,7 +1303,7 @@ class _BiomarkerDetailScreenState extends State<BiomarkerDetailScreen> with Tick
           height: 40,
           width: double.infinity,
           decoration: BoxDecoration(
-            color: Colors.grey.shade100,
+            color: shimmerBgLight,
             borderRadius: BorderRadius.circular(4),
           ),
         ),
@@ -1228,7 +1311,12 @@ class _BiomarkerDetailScreenState extends State<BiomarkerDetailScreen> with Tick
     );
   }
 
-  Widget _buildRelatedInsightsCard() {
+  Widget _buildRelatedInsightsCard(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardBg = isDark ? const Color(0xFF1E293B) : Colors.white;
+    final borderColor = isDark ? Colors.grey[700]! : Colors.grey.shade300;
+    final textColor = isDark ? Colors.white : Colors.black87;
+
     return Obx(() {
       final aiInsights = controller.biomarkerAiInsights.value;
       final isLoading = controller.aiInsightsStatus.value == Status.LOADING;
@@ -1236,9 +1324,9 @@ class _BiomarkerDetailScreenState extends State<BiomarkerDetailScreen> with Tick
       return Container(
         padding: EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: cardBg,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.grey.shade300),
+          border: Border.all(color: borderColor),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1252,13 +1340,14 @@ class _BiomarkerDetailScreenState extends State<BiomarkerDetailScreen> with Tick
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
+                    color: textColor,
                   ),
                 ),
               ],
             ),
             SizedBox(height: 12),
             if (isLoading)
-              _buildLoadingPlaceholder()
+              _buildLoadingPlaceholder(context)
             else if (aiInsights != null && aiInsights.relatedInsights.isNotEmpty) ...[
               ...aiInsights.relatedInsights.map((insight) => Container(
                     margin: EdgeInsets.only(bottom: 12),
@@ -1474,13 +1563,19 @@ class _BiomarkerDetailScreenState extends State<BiomarkerDetailScreen> with Tick
     }
   }
 
-  Widget _buildInfoCard() {
+  Widget _buildInfoCard(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardBg = isDark ? const Color(0xFF1E293B) : Colors.white;
+    final borderColor = isDark ? Colors.grey[700]! : Colors.grey.shade300;
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final subtitleColor = isDark ? Colors.grey[400] : Colors.grey.shade700;
+
     return Container(
       padding: EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cardBg,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade300),
+        border: Border.all(color: borderColor),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1490,18 +1585,19 @@ class _BiomarkerDetailScreenState extends State<BiomarkerDetailScreen> with Tick
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.bold,
+              color: textColor,
             ),
           ),
           SizedBox(height: 12),
-          
-          _buildInfoRow('Category', biomarker!.categoryDisplayName),
-          _buildInfoRow('Preferred Unit', biomarker!.definition.preferredUnit ?? 'N/A'),
-          
+
+          _buildInfoRow(context, 'Category', biomarker!.categoryDisplayName),
+          _buildInfoRow(context, 'Preferred Unit', biomarker!.definition.preferredUnit ?? 'N/A'),
+
           if (biomarker!.definition.description != null) ...[
             SizedBox(height: 8),
             Text(
               biomarker!.definition.description!,
-              style: TextStyle(color: Colors.grey.shade700),
+              style: TextStyle(color: subtitleColor),
             ),
           ],
         ],
@@ -1509,13 +1605,19 @@ class _BiomarkerDetailScreenState extends State<BiomarkerDetailScreen> with Tick
     );
   }
 
-  Widget _buildLoincCard() {
+  Widget _buildLoincCard(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardBg = isDark ? const Color(0xFF1E293B) : Colors.white;
+    final borderColor = isDark ? Colors.grey[700]! : Colors.grey.shade300;
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final subtitleColor = isDark ? Colors.grey[400] : Colors.grey.shade600;
+
     return Container(
       padding: EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cardBg,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade300),
+        border: Border.all(color: borderColor),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1525,16 +1627,17 @@ class _BiomarkerDetailScreenState extends State<BiomarkerDetailScreen> with Tick
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.bold,
+              color: textColor,
             ),
           ),
           SizedBox(height: 8),
-          _buildInfoRow('LOINC Code', biomarker!.definition.loincCode!),
+          _buildInfoRow(context, 'LOINC Code', biomarker!.definition.loincCode!),
           SizedBox(height: 4),
           Text(
             'LOINC (Logical Observation Identifiers Names and Codes) is a universal standard for identifying medical laboratory observations.',
             style: TextStyle(
               fontSize: 12,
-              color: Colors.grey.shade600,
+              color: subtitleColor,
             ),
           ),
         ],
@@ -1542,7 +1645,11 @@ class _BiomarkerDetailScreenState extends State<BiomarkerDetailScreen> with Tick
     );
   }
 
-  Widget _buildInfoRow(String label, String value) {
+  Widget _buildInfoRow(BuildContext context, String label, String value) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final labelColor = isDark ? Colors.grey[400] : Colors.grey.shade600;
+    final valueColor = isDark ? Colors.white : Colors.grey.shade800;
+
     return Padding(
       padding: EdgeInsets.symmetric(vertical: 2),
       child: Row(
@@ -1554,7 +1661,7 @@ class _BiomarkerDetailScreenState extends State<BiomarkerDetailScreen> with Tick
               label,
               style: TextStyle(
                 fontSize: 12,
-                color: Colors.grey.shade600,
+                color: labelColor,
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -1564,7 +1671,7 @@ class _BiomarkerDetailScreenState extends State<BiomarkerDetailScreen> with Tick
               value,
               style: TextStyle(
                 fontSize: 12,
-                color: Colors.grey.shade800,
+                color: valueColor,
               ),
             ),
           ),
@@ -1574,11 +1681,636 @@ class _BiomarkerDetailScreenState extends State<BiomarkerDetailScreen> with Tick
   }
 
   void _showAddValueDialog() {
-    // TODO: Implement add value dialog
-    Get.snackbar(
-      'Add Measurement',
-      'Add measurement dialog coming soon',
-      snackPosition: SnackPosition.BOTTOM,
+    _showModifyDataDialog(Get.context!);
+  }
+
+  // ======== MODIFY DATA DIALOGS ========
+
+  void _showModifyDataDialog(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardBg = isDark ? const Color(0xFF1E293B) : Colors.white;
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final subtitleColor = isDark ? Colors.grey[400] : Colors.grey.shade600;
+    final borderColor = isDark ? Colors.grey[700]! : Colors.grey.shade300;
+
+    final selectedBiomarker = controller.selectedBiomarker.value ?? biomarker!;
+    final observations = selectedBiomarker.recentObservations.toList();
+    observations.sort((a, b) => b.collectedAt.compareTo(a.collectedAt));
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.85,
+        decoration: BoxDecoration(
+          color: cardBg,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          children: [
+            // Handle bar
+            Container(
+              margin: EdgeInsets.only(top: 12),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: subtitleColor,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+
+            // Header
+            Padding(
+              padding: EdgeInsets.all(16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Modify ${biomarker!.definition.name}',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: textColor,
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: Icon(Icons.close, color: subtitleColor),
+                  ),
+                ],
+              ),
+            ),
+
+            // Add new value button
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.pop(context);
+                  _showAddNewValueDialog(context);
+                },
+                icon: Icon(Icons.add),
+                label: Text('Add New Value'),
+                style: ElevatedButton.styleFrom(
+                  minimumSize: Size(double.infinity, 48),
+                ),
+              ),
+            ),
+
+            SizedBox(height: 16),
+
+            // Divider with label
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                children: [
+                  Expanded(child: Divider(color: borderColor)),
+                  Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 12),
+                    child: Text(
+                      'Previous Values',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: subtitleColor,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                  Expanded(child: Divider(color: borderColor)),
+                ],
+              ),
+            ),
+
+            SizedBox(height: 8),
+
+            // Values list
+            Expanded(
+              child: observations.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.science_outlined, size: 48, color: subtitleColor),
+                          SizedBox(height: 12),
+                          Text(
+                            'No measurements yet',
+                            style: TextStyle(color: subtitleColor, fontSize: 16),
+                          ),
+                        ],
+                      ),
+                    )
+                  : ListView.builder(
+                      padding: EdgeInsets.symmetric(horizontal: 16),
+                      itemCount: observations.length,
+                      itemBuilder: (context, index) {
+                        final obs = observations[index];
+                        return Container(
+                          margin: EdgeInsets.only(bottom: 8),
+                          decoration: BoxDecoration(
+                            color: isDark ? const Color(0xFF0F172A) : Colors.grey.shade50,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: borderColor),
+                          ),
+                          child: ListTile(
+                            onTap: () {
+                              Get.back(); // Close bottom sheet
+                              Future.delayed(Duration(milliseconds: 100), () {
+                                _showEditObservationDialog(Get.context!, obs);
+                              });
+                            },
+                            leading: Container(
+                              width: 8,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color: _getStatusColor(obs.status),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            ),
+                            title: Text(
+                              obs.displayValue,
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: _getStatusColor(obs.status),
+                              ),
+                            ),
+                            subtitle: Text(
+                              DateFormat('MMM dd, yyyy • HH:mm').format(obs.collectedAt),
+                              style: TextStyle(color: subtitleColor, fontSize: 12),
+                            ),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  onPressed: () {
+                                    Get.back(); // Close bottom sheet
+                                    Future.delayed(Duration(milliseconds: 100), () {
+                                      _showEditObservationDialog(Get.context!, obs);
+                                    });
+                                  },
+                                  icon: Icon(Icons.edit, size: 20, color: Colors.blue),
+                                ),
+                                IconButton(
+                                  onPressed: () {
+                                    Get.back(); // Close bottom sheet first
+                                    Future.delayed(Duration(milliseconds: 100), () {
+                                      _confirmDeleteObservation(Get.context!, obs);
+                                    });
+                                  },
+                                  icon: Icon(Icons.delete_outline, size: 20, color: Colors.red),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showAddNewValueDialog(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardBg = isDark ? const Color(0xFF1E293B) : Colors.white;
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final subtitleColor = isDark ? Colors.grey[400] : Colors.grey.shade600;
+    final inputBg = isDark ? const Color(0xFF0F172A) : Colors.grey.shade50;
+
+    final valueController = TextEditingController();
+    final notesController = TextEditingController();
+    final selectedDate = DateTime.now().obs;
+    final latestObs = biomarker?.latestObservation;
+    final unit = latestObs?.unitOriginal ?? biomarker?.definition.preferredUnit ?? 'mg/dL';
+
+    Get.dialog(
+      AlertDialog(
+        backgroundColor: cardBg,
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Add Value for',
+              style: TextStyle(fontSize: 14, color: subtitleColor),
+            ),
+            Text(
+              biomarker!.definition.name,
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.blue,
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Last value info
+              if (latestObs != null)
+                Container(
+                  padding: EdgeInsets.all(12),
+                  margin: EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: inputBg,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Last Value',
+                            style: TextStyle(fontSize: 11, color: subtitleColor),
+                          ),
+                          Text(
+                            latestObs.displayValue,
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: textColor,
+                            ),
+                          ),
+                          Text(
+                            'on ${DateFormat('MMM dd, yyyy').format(latestObs.collectedAt)}',
+                            style: TextStyle(fontSize: 11, color: subtitleColor),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+
+              // New value input
+              Text(
+                'New Value',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: textColor,
+                ),
+              ),
+              SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    flex: 2,
+                    child: TextField(
+                      controller: valueController,
+                      keyboardType: TextInputType.numberWithOptions(decimal: true),
+                      style: TextStyle(color: textColor),
+                      decoration: InputDecoration(
+                        hintText: 'Enter value',
+                        hintStyle: TextStyle(color: subtitleColor),
+                        filled: true,
+                        fillColor: inputBg,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                    ),
+                  ),
+                  SizedBox(width: 8),
+                  Container(
+                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                    decoration: BoxDecoration(
+                      color: inputBg,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(unit, style: TextStyle(color: textColor)),
+                  ),
+                ],
+              ),
+
+              SizedBox(height: 16),
+
+              // Collection date
+              Text(
+                'Collection Date',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: textColor,
+                ),
+              ),
+              SizedBox(height: 8),
+              Obx(() => InkWell(
+                    onTap: () async {
+                      final date = await showDatePicker(
+                        context: context,
+                        initialDate: selectedDate.value,
+                        firstDate: DateTime(2020),
+                        lastDate: DateTime.now(),
+                      );
+                      if (date != null) {
+                        selectedDate.value = date;
+                      }
+                    },
+                    child: Container(
+                      padding: EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: inputBg,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.calendar_today, size: 18, color: subtitleColor),
+                          SizedBox(width: 8),
+                          Text(
+                            DateFormat('MMM dd, yyyy').format(selectedDate.value),
+                            style: TextStyle(color: textColor),
+                          ),
+                          Spacer(),
+                          Icon(Icons.arrow_drop_down, color: subtitleColor),
+                        ],
+                      ),
+                    ),
+                  )),
+
+              SizedBox(height: 16),
+
+              // Notes
+              Text(
+                'Notes (Optional)',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: textColor,
+                ),
+              ),
+              SizedBox(height: 8),
+              TextField(
+                controller: notesController,
+                maxLines: 2,
+                style: TextStyle(color: textColor),
+                decoration: InputDecoration(
+                  hintText: 'Add context or notes...',
+                  hintStyle: TextStyle(color: subtitleColor),
+                  filled: true,
+                  fillColor: inputBg,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Get.back(),
+            child: Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final value = double.tryParse(valueController.text);
+              if (value == null) {
+                Get.snackbar('Error', 'Please enter a valid number');
+                return;
+              }
+              // Call controller to add the observation
+              controller.addBiomarkerObservation(
+                biomarkerId: biomarker!.definition.id,
+                value: value,
+                unit: unit,
+                collectedAt: selectedDate.value,
+                notes: notesController.text.isEmpty ? null : notesController.text,
+              );
+              Get.back();
+            },
+            child: Text('Add Value'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showEditObservationDialog(BuildContext context, Observation observation) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardBg = isDark ? const Color(0xFF1E293B) : Colors.white;
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final subtitleColor = isDark ? Colors.grey[400] : Colors.grey.shade600;
+    final inputBg = isDark ? const Color(0xFF0F172A) : Colors.grey.shade50;
+
+    final valueController = TextEditingController(text: observation.valueNum?.toString() ?? '');
+    final notesController = TextEditingController(text: observation.notes ?? '');
+    final selectedDate = observation.collectedAt.obs;
+    final unit = observation.unitOriginal ?? biomarker?.definition.preferredUnit ?? 'mg/dL';
+
+    Get.dialog(
+      AlertDialog(
+        backgroundColor: cardBg,
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Edit Value for',
+              style: TextStyle(fontSize: 14, color: subtitleColor),
+            ),
+            Text(
+              biomarker!.definition.name,
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.blue,
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Value input
+              Text(
+                'Value',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: textColor,
+                ),
+              ),
+              SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    flex: 2,
+                    child: TextField(
+                      controller: valueController,
+                      keyboardType: TextInputType.numberWithOptions(decimal: true),
+                      style: TextStyle(color: textColor),
+                      decoration: InputDecoration(
+                        hintText: 'Enter value',
+                        hintStyle: TextStyle(color: subtitleColor),
+                        filled: true,
+                        fillColor: inputBg,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                    ),
+                  ),
+                  SizedBox(width: 8),
+                  Container(
+                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                    decoration: BoxDecoration(
+                      color: inputBg,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(unit, style: TextStyle(color: textColor)),
+                  ),
+                ],
+              ),
+
+              SizedBox(height: 16),
+
+              // Collection date
+              Text(
+                'Collection Date',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: textColor,
+                ),
+              ),
+              SizedBox(height: 8),
+              Obx(() => InkWell(
+                    onTap: () async {
+                      final date = await showDatePicker(
+                        context: context,
+                        initialDate: selectedDate.value,
+                        firstDate: DateTime(2020),
+                        lastDate: DateTime.now(),
+                      );
+                      if (date != null) {
+                        selectedDate.value = date;
+                      }
+                    },
+                    child: Container(
+                      padding: EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: inputBg,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.calendar_today, size: 18, color: subtitleColor),
+                          SizedBox(width: 8),
+                          Text(
+                            DateFormat('MMM dd, yyyy').format(selectedDate.value),
+                            style: TextStyle(color: textColor),
+                          ),
+                          Spacer(),
+                          Icon(Icons.arrow_drop_down, color: subtitleColor),
+                        ],
+                      ),
+                    ),
+                  )),
+
+              SizedBox(height: 16),
+
+              // Notes
+              Text(
+                'Notes (Optional)',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: textColor,
+                ),
+              ),
+              SizedBox(height: 8),
+              TextField(
+                controller: notesController,
+                maxLines: 2,
+                style: TextStyle(color: textColor),
+                decoration: InputDecoration(
+                  hintText: 'Add context or notes...',
+                  hintStyle: TextStyle(color: subtitleColor),
+                  filled: true,
+                  fillColor: inputBg,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => _confirmDeleteObservation(context, observation),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: Text('Delete'),
+          ),
+          TextButton(
+            onPressed: () => Get.back(),
+            child: Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final value = double.tryParse(valueController.text);
+              if (value == null) {
+                Get.snackbar('Error', 'Please enter a valid number');
+                return;
+              }
+              // Call controller to update the observation
+              controller.updateBiomarkerObservation(
+                observationId: observation.id,
+                value: value,
+                collectedAt: selectedDate.value,
+                notes: notesController.text.isEmpty ? null : notesController.text,
+              );
+              Get.back();
+            },
+            child: Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmDeleteObservation(BuildContext context, Observation observation) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardBg = isDark ? const Color(0xFF1E293B) : Colors.white;
+    final textColor = isDark ? Colors.white : Colors.black87;
+
+    Get.dialog(
+      AlertDialog(
+        backgroundColor: cardBg,
+        title: Text('Delete Measurement?', style: TextStyle(color: textColor)),
+        content: Text(
+          'Are you sure you want to delete this measurement?\n\n${observation.displayValue} on ${DateFormat('MMM dd, yyyy').format(observation.collectedAt)}\n\nThis action cannot be undone.',
+          style: TextStyle(color: textColor),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Get.back(),
+            child: Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              controller.deleteBiomarkerObservation(observation.id);
+              Get.back();
+              // If we were in the modify dialog, close it too
+              if (Navigator.of(context).canPop()) {
+                Navigator.of(context).pop();
+              }
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: Text('Delete'),
+          ),
+        ],
+      ),
     );
   }
 

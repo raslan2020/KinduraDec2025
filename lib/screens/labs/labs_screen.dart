@@ -317,9 +317,14 @@ class _LabsScreenState extends State<LabsScreen> with TickerProviderStateMixin {
   }
 
   void _showAddLabOptions() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final sheetBg = isDark ? const Color(0xFF0F172A) : Colors.white;
+    final textColor = isDark ? Colors.white : Colors.black87;
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      backgroundColor: sheetBg,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -331,7 +336,7 @@ class _LabsScreenState extends State<LabsScreen> with TickerProviderStateMixin {
           children: [
             Text(
               "Add Lab Data",
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: textColor),
             ),
             SizedBox(height: 20),
             
@@ -369,12 +374,12 @@ class _LabsScreenState extends State<LabsScreen> with TickerProviderStateMixin {
             ),
             
             SizedBox(height: 20),
-            
+
             // Disclaimer
             Container(
               padding: EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.blue.shade50,
+                color: isDark ? Colors.blue.shade900.withOpacity(0.3) : Colors.blue.shade50,
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Row(
@@ -386,7 +391,7 @@ class _LabsScreenState extends State<LabsScreen> with TickerProviderStateMixin {
                       "For informational purposes only. Not a substitute for professional medical advice.",
                       style: TextStyle(
                         fontSize: 12,
-                        color: Colors.blue.shade600,
+                        color: isDark ? Colors.blue.shade300 : Colors.blue.shade600,
                       ),
                     ),
                   ),
@@ -407,31 +412,42 @@ class _LabsScreenState extends State<LabsScreen> with TickerProviderStateMixin {
     required String subtitle,
     required VoidCallback onTap,
   }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final subtextColor = isDark ? Colors.grey.shade400 : Colors.grey.shade600;
+
     return ListTile(
       leading: Container(
         padding: EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: Colors.blue.withOpacity(0.1),
+          color: isDark ? Colors.blue.withOpacity(0.2) : Colors.blue.withOpacity(0.1),
           borderRadius: BorderRadius.circular(8),
         ),
         child: Icon(icon, color: Colors.blue),
       ),
-      title: Text(title, style: TextStyle(fontWeight: FontWeight.w600)),
-      subtitle: Text(subtitle, style: TextStyle(fontSize: 12)),
+      title: Text(title, style: TextStyle(fontWeight: FontWeight.w600, color: textColor)),
+      subtitle: Text(subtitle, style: TextStyle(fontSize: 12, color: subtextColor)),
       onTap: onTap,
     );
   }
 
   void _showSearchDialog() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final dialogBg = isDark ? const Color(0xFF0F172A) : null;
+    final textColor = isDark ? Colors.white : Colors.black87;
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Search Biomarkers'),
+        backgroundColor: dialogBg,
+        title: Text('Search Biomarkers', style: TextStyle(color: textColor)),
         content: TextField(
           onChanged: controller.updateSearchQuery,
+          style: TextStyle(color: textColor),
           decoration: InputDecoration(
             hintText: 'Enter biomarker name...',
-            prefixIcon: Icon(Icons.search),
+            hintStyle: TextStyle(color: isDark ? Colors.grey.shade500 : null),
+            prefixIcon: Icon(Icons.search, color: isDark ? Colors.grey.shade400 : null),
           ),
           autofocus: true,
         ),
@@ -672,8 +688,16 @@ class _ManualEntryDialogState extends State<_ManualEntryDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final dialogBg = isDark ? const Color(0xFF0F172A) : null;
+    final cardBg = isDark ? const Color(0xFF1E293B) : Colors.grey.shade100;
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final subtextColor = isDark ? Colors.grey.shade400 : Colors.grey.shade600;
+    final borderColor = isDark ? Colors.grey.shade700 : Colors.grey.shade400;
+
     return AlertDialog(
-      title: Text('Add Biomarker Measurement'),
+      backgroundColor: dialogBg,
+      title: Text('Add Biomarker Measurement', style: TextStyle(color: textColor)),
       content: Container(
         width: MediaQuery.of(context).size.width * 0.9,
         constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.7),
@@ -685,7 +709,7 @@ class _ManualEntryDialogState extends State<_ManualEntryDialog> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Biomarker Search
-                Text('Select Biomarker', style: TextStyle(fontWeight: FontWeight.bold)),
+                Text('Select Biomarker', style: TextStyle(fontWeight: FontWeight.bold, color: textColor)),
                 SizedBox(height: 8),
                 TextFormField(
                   controller: _searchController,
@@ -710,7 +734,8 @@ class _ManualEntryDialogState extends State<_ManualEntryDialog> {
                   SizedBox(height: 8),
                   Container(
                     decoration: BoxDecoration(
-                      border: Border.all(color: Colors.grey.shade300),
+                      color: cardBg,
+                      border: Border.all(color: borderColor),
                       borderRadius: BorderRadius.circular(4),
                     ),
                     constraints: BoxConstraints(maxHeight: 150),
@@ -721,35 +746,35 @@ class _ManualEntryDialogState extends State<_ManualEntryDialog> {
                         final biomarker = _searchResults[index];
                         return ListTile(
                           dense: true,
-                          title: Text(biomarker.name),
-                          subtitle: Text(biomarker.category),
+                          title: Text(biomarker.name, style: TextStyle(color: textColor)),
+                          subtitle: Text(biomarker.category, style: TextStyle(color: subtextColor)),
                           onTap: () => _selectBiomarker(biomarker),
                         );
                       },
                     ),
                   ),
                 ],
-                
+
                 // Selected Biomarker
                 if (_selectedBiomarker != null) ...[
                   SizedBox(height: 16),
                   Container(
                     padding: EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: Colors.blue.shade50,
+                      color: isDark ? Colors.blue.shade900.withOpacity(0.3) : Colors.blue.shade50,
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.blue.shade200),
+                      border: Border.all(color: isDark ? Colors.blue.shade700 : Colors.blue.shade200),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
                           _selectedBiomarker!.name,
-                          style: TextStyle(fontWeight: FontWeight.bold),
+                          style: TextStyle(fontWeight: FontWeight.bold, color: textColor),
                         ),
                         Text(
                           _selectedBiomarker!.category,
-                          style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                          style: TextStyle(fontSize: 12, color: subtextColor),
                         ),
                         if (_selectedBiomarker!.preferredUnit != null)
                           Text(
@@ -760,11 +785,11 @@ class _ManualEntryDialogState extends State<_ManualEntryDialog> {
                     ),
                   ),
                 ],
-                
+
                 SizedBox(height: 16),
-                
+
                 // Value Input
-                Text('Measurement Value', style: TextStyle(fontWeight: FontWeight.bold)),
+                Text('Measurement Value', style: TextStyle(fontWeight: FontWeight.bold, color: textColor)),
                 SizedBox(height: 8),
                 Row(
                   children: [
@@ -808,51 +833,53 @@ class _ManualEntryDialogState extends State<_ManualEntryDialog> {
                 ),
                 
                 SizedBox(height: 16),
-                
+
                 // Collection Date
-                Text('Collection Date', style: TextStyle(fontWeight: FontWeight.bold)),
+                Text('Collection Date', style: TextStyle(fontWeight: FontWeight.bold, color: textColor)),
                 SizedBox(height: 8),
                 InkWell(
                   onTap: _selectDate,
                   child: Container(
                     padding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
                     decoration: BoxDecoration(
-                      border: Border.all(color: Colors.grey.shade400),
+                      border: Border.all(color: borderColor),
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Row(
                       children: [
-                        Icon(Icons.calendar_today, size: 16),
+                        Icon(Icons.calendar_today, size: 16, color: subtextColor),
                         SizedBox(width: 8),
-                        Text(DateFormat('MMM dd, yyyy').format(_collectedDate)),
+                        Text(DateFormat('MMM dd, yyyy').format(_collectedDate), style: TextStyle(color: textColor)),
                         Spacer(),
-                        Icon(Icons.arrow_drop_down),
+                        Icon(Icons.arrow_drop_down, color: subtextColor),
                       ],
                     ),
                   ),
                 ),
-                
+
                 SizedBox(height: 16),
-                
+
                 // Notes (Optional)
-                Text('Notes (Optional)', style: TextStyle(fontWeight: FontWeight.bold)),
+                Text('Notes (Optional)', style: TextStyle(fontWeight: FontWeight.bold, color: textColor)),
                 SizedBox(height: 8),
                 TextFormField(
                   controller: _notesController,
                   maxLines: 3,
+                  style: TextStyle(color: textColor),
                   decoration: InputDecoration(
                     hintText: 'Add any additional notes or context...',
+                    hintStyle: TextStyle(color: subtextColor),
                     border: OutlineInputBorder(),
                   ),
                 ),
-                
+
                 SizedBox(height: 16),
-                
+
                 // Safety Disclaimer
                 Container(
                   padding: EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.orange.shade50,
+                    color: isDark ? Colors.orange.shade900.withOpacity(0.3) : Colors.orange.shade50,
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Row(
@@ -864,7 +891,7 @@ class _ManualEntryDialogState extends State<_ManualEntryDialog> {
                           'For tracking purposes only. Always consult your healthcare provider for medical decisions.',
                           style: TextStyle(
                             fontSize: 11,
-                            color: Colors.orange.shade700,
+                            color: isDark ? Colors.orange.shade300 : Colors.orange.shade700,
                           ),
                         ),
                       ),
@@ -1011,11 +1038,18 @@ class _AddValueDialogState extends State<_AddValueDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardBg = isDark ? const Color(0xFF1E293B) : Colors.grey.shade100;
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final subtextColor = isDark ? Colors.grey.shade400 : Colors.grey.shade600;
+    final borderColor = isDark ? Colors.grey.shade700 : Colors.grey.shade400;
+
     return AlertDialog(
+      backgroundColor: isDark ? const Color(0xFF0F172A) : null,
       title: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Add Value for'),
+          Text('Add Value for', style: TextStyle(color: textColor)),
           Text(
             widget.biomarker.definition.name,
             style: TextStyle(fontSize: 16, color: Colors.blue.shade700),
@@ -1035,21 +1069,21 @@ class _AddValueDialogState extends State<_AddValueDialog> {
                 Container(
                   padding: EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.grey.shade100,
+                    color: cardBg,
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Last Value', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                      Text('Last Value', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: textColor)),
                       SizedBox(height: 4),
                       Text(
                         widget.biomarker.latestObservation!.displayValue,
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: textColor),
                       ),
                       Text(
                         'on ${DateFormat('MMM dd, yyyy').format(widget.biomarker.latestObservation!.collectedAt)}',
-                        style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                        style: TextStyle(fontSize: 11, color: subtextColor),
                       ),
                     ],
                   ),
@@ -1059,9 +1093,9 @@ class _AddValueDialogState extends State<_AddValueDialog> {
               
               // Reference Range
               if (widget.biomarker.definition.referenceRanges.isNotEmpty) ...[
-                Text('Reference Range', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                Text('Reference Range', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: textColor)),
                 SizedBox(height: 4),
-                ...widget.biomarker.definition.referenceRanges.map((range) => 
+                ...widget.biomarker.definition.referenceRanges.map((range) =>
                   Text(
                     '${range.low ?? '?'} - ${range.high ?? '?'} ${range.unit}',
                     style: TextStyle(fontSize: 12, color: Colors.green.shade600),
@@ -1069,9 +1103,9 @@ class _AddValueDialogState extends State<_AddValueDialog> {
                 ),
                 SizedBox(height: 16),
               ],
-              
+
               // Value Input
-              Text('New Value', style: TextStyle(fontWeight: FontWeight.bold)),
+              Text('New Value', style: TextStyle(fontWeight: FontWeight.bold, color: textColor)),
               SizedBox(height: 8),
               Row(
                 children: [
@@ -1101,45 +1135,45 @@ class _AddValueDialogState extends State<_AddValueDialog> {
                     child: Container(
                       padding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
                       decoration: BoxDecoration(
-                        color: Colors.grey.shade100,
-                        border: Border.all(color: Colors.grey.shade400),
+                        color: cardBg,
+                        border: Border.all(color: borderColor),
                         borderRadius: BorderRadius.circular(4),
                       ),
-                      child: Text(_unit.isNotEmpty ? _unit : 'Unit'),
+                      child: Text(_unit.isNotEmpty ? _unit : 'Unit', style: TextStyle(color: textColor)),
                     ),
                   ),
                 ],
               ),
-              
+
               SizedBox(height: 16),
-              
+
               // Collection Date
-              Text('Collection Date', style: TextStyle(fontWeight: FontWeight.bold)),
+              Text('Collection Date', style: TextStyle(fontWeight: FontWeight.bold, color: textColor)),
               SizedBox(height: 8),
               InkWell(
                 onTap: _selectDate,
                 child: Container(
                   padding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
                   decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey.shade400),
+                    border: Border.all(color: borderColor),
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Row(
                     children: [
-                      Icon(Icons.calendar_today, size: 16),
+                      Icon(Icons.calendar_today, size: 16, color: subtextColor),
                       SizedBox(width: 8),
-                      Text(DateFormat('MMM dd, yyyy').format(_collectedDate)),
+                      Text(DateFormat('MMM dd, yyyy').format(_collectedDate), style: TextStyle(color: textColor)),
                       Spacer(),
-                      Icon(Icons.arrow_drop_down),
+                      Icon(Icons.arrow_drop_down, color: subtextColor),
                     ],
                   ),
                 ),
               ),
-              
+
               SizedBox(height: 16),
-              
+
               // Notes (Optional)
-              Text('Notes (Optional)', style: TextStyle(fontWeight: FontWeight.bold)),
+              Text('Notes (Optional)', style: TextStyle(fontWeight: FontWeight.bold, color: textColor)),
               SizedBox(height: 8),
               TextFormField(
                 controller: _notesController,

@@ -3,10 +3,10 @@
 <plist version="1.0">
 <dict>
 	<key>logFormatVersion</key>
-	<integer>11</integer>
+	<integer>12</integer>
 	<key>logs</key>
 	<dict>
-		<key>0E02E11D-9A3C-4137-ABED-62C4AC7C45EA</key>
+		<key>42067F85-4E57-45B7-B1B7-8528C756EB33</key>
 		<dict>
 			<key>className</key>
 			<string>IDECommandLineBuildLog</string>
@@ -15,49 +15,7 @@
 			<key>domainType</key>
 			<string>Xcode.IDEActivityLogDomainType.BuildLog</string>
 			<key>fileName</key>
-			<string>0E02E11D-9A3C-4137-ABED-62C4AC7C45EA.xcactivitylog</string>
-			<key>hasPrimaryLog</key>
-			<true/>
-			<key>primaryObservable</key>
-			<dict>
-				<key>highLevelStatus</key>
-				<string>W</string>
-				<key>totalNumberOfAnalyzerIssues</key>
-				<integer>0</integer>
-				<key>totalNumberOfErrors</key>
-				<integer>0</integer>
-				<key>totalNumberOfTestFailures</key>
-				<integer>0</integer>
-				<key>totalNumberOfWarnings</key>
-				<integer>1</integer>
-			</dict>
-			<key>schemeIdentifier-containerName</key>
-			<string>KinduraWatch project</string>
-			<key>schemeIdentifier-schemeName</key>
-			<string>KinduraWatch</string>
-			<key>schemeIdentifier-sharedScheme</key>
-			<integer>1</integer>
-			<key>signature</key>
-			<string>Building project KinduraWatch with scheme KinduraWatch and configuration Debug</string>
-			<key>timeStartedRecording</key>
-			<real>787341605.03576195</real>
-			<key>timeStoppedRecording</key>
-			<real>787341621.21841705</real>
-			<key>title</key>
-			<string>Building project KinduraWatch with scheme KinduraWatch and configuration Debug</string>
-			<key>uniqueIdentifier</key>
-			<string>0E02E11D-9A3C-4137-ABED-62C4AC7C45EA</string>
-		</dict>
-		<key>78309B3C-23CE-489E-8370-BA878733EB34</key>
-		<dict>
-			<key>className</key>
-			<string>IDECommandLineBuildLog</string>
-			<key>documentTypeString</key>
-			<string>&lt;nil&gt;</string>
-			<key>domainType</key>
-			<string>Xcode.IDEActivityLogDomainType.BuildLog</string>
-			<key>fileName</key>
-			<string>78309B3C-23CE-489E-8370-BA878733EB34.xcactivitylog</string>
+			<string>42067F85-4E57-45B7-B1B7-8528C756EB33.xcactivitylog</string>
 			<key>hasPrimaryLog</key>
 			<true/>
 			<key>primaryObservable</key>
@@ -82,15 +40,15 @@
 			<key>signature</key>
 			<string>Cleaning project KinduraWatch with scheme KinduraWatch and configuration Debug</string>
 			<key>timeStartedRecording</key>
-			<real>787342391.36548996</real>
+			<real>788724557.85634398</real>
 			<key>timeStoppedRecording</key>
-			<real>787342392.032969</real>
+			<real>788724558.26567304</real>
 			<key>title</key>
 			<string>Cleaning project KinduraWatch with scheme KinduraWatch and configuration Debug</string>
 			<key>uniqueIdentifier</key>
-			<string>78309B3C-23CE-489E-8370-BA878733EB34</string>
+			<string>42067F85-4E57-45B7-B1B7-8528C756EB33</string>
 		</dict>
-		<key>9BA63C89-EF78-4DF7-9CEB-8DA63ABF2F4E</key>
+		<key>5C50502C-681C-4D8E-9DF0-B47AC75FD6D4</key>
 		<dict>
 			<key>className</key>
 			<string>IDECommandLineBuildLog</string>
@@ -99,7 +57,7 @@
 			<key>domainType</key>
 			<string>Xcode.IDEActivityLogDomainType.BuildLog</string>
 			<key>fileName</key>
-			<string>9BA63C89-EF78-4DF7-9CEB-8DA63ABF2F4E.xcactivitylog</string>
+			<string>5C50502C-681C-4D8E-9DF0-B47AC75FD6D4.xcactivitylog</string>
 			<key>hasPrimaryLog</key>
 			<true/>
 			<key>primaryObservable</key>
@@ -124,13 +82,55 @@
 			<key>signature</key>
 			<string>Building project KinduraWatch with scheme KinduraWatch and configuration Debug</string>
 			<key>timeStartedRecording</key>
-			<real>787342392.03649199</real>
+			<real>788716631.55005598</real>
 			<key>timeStoppedRecording</key>
-			<real>787342404.12044406</real>
+			<real>788716641.26719904</real>
 			<key>title</key>
 			<string>Building project KinduraWatch with scheme KinduraWatch and configuration Debug</string>
 			<key>uniqueIdentifier</key>
-			<string>9BA63C89-EF78-4DF7-9CEB-8DA63ABF2F4E</string>
+			<string>5C50502C-681C-4D8E-9DF0-B47AC75FD6D4</string>
+		</dict>
+		<key>C9E9C92E-0ED5-4891-88CE-445B712C8E02</key>
+		<dict>
+			<key>className</key>
+			<string>IDECommandLineBuildLog</string>
+			<key>documentTypeString</key>
+			<string>&lt;nil&gt;</string>
+			<key>domainType</key>
+			<string>Xcode.IDEActivityLogDomainType.BuildLog</string>
+			<key>fileName</key>
+			<string>C9E9C92E-0ED5-4891-88CE-445B712C8E02.xcactivitylog</string>
+			<key>hasPrimaryLog</key>
+			<true/>
+			<key>primaryObservable</key>
+			<dict>
+				<key>highLevelStatus</key>
+				<string>W</string>
+				<key>totalNumberOfAnalyzerIssues</key>
+				<integer>0</integer>
+				<key>totalNumberOfErrors</key>
+				<integer>0</integer>
+				<key>totalNumberOfTestFailures</key>
+				<integer>0</integer>
+				<key>totalNumberOfWarnings</key>
+				<integer>1</integer>
+			</dict>
+			<key>schemeIdentifier-containerName</key>
+			<string>KinduraWatch project</string>
+			<key>schemeIdentifier-schemeName</key>
+			<string>KinduraWatch</string>
+			<key>schemeIdentifier-sharedScheme</key>
+			<integer>1</integer>
+			<key>signature</key>
+			<string>Building project KinduraWatch with scheme KinduraWatch and configuration Debug</string>
+			<key>timeStartedRecording</key>
+			<real>788724558.27153099</real>
+			<key>timeStoppedRecording</key>
+			<real>788724569.10538304</real>
+			<key>title</key>
+			<string>Building project KinduraWatch with scheme KinduraWatch and configuration Debug</string>
+			<key>uniqueIdentifier</key>
+			<string>C9E9C92E-0ED5-4891-88CE-445B712C8E02</string>
 		</dict>
 	</dict>
 </dict>
