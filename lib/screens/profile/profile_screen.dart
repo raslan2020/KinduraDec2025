@@ -10,6 +10,8 @@ import 'package:kindura_ai/screens/bottom_navigation/bottom_navigation_controlle
 import 'package:kindura_ai/screens/profile/profile_controller.dart';
 import 'package:kindura_ai/services/theme_service.dart';
 import 'package:kindura_ai/services/watch_vitals_service.dart';
+import 'package:kindura_ai/screens/home/home_controller.dart';
+import 'package:kindura_ai/models/health/data_source_mode.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -898,6 +900,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   fontStyle: FontStyle.italic,
                 ),
               ),
+              SizedBox(height: 24.h),
+
+              // Health Data Source Section
+              Text(
+                'Health Data Source',
+                style: TextStyle(
+                  fontSize: 16.sp,
+                  fontWeight: FontWeight.w600,
+                  color: Theme.of(context).textTheme.bodyLarge?.color,
+                ),
+              ),
+              SizedBox(height: 8.h),
+              Text(
+                'Choose how Kindura collects your health data',
+                style: TextStyle(
+                  fontSize: 12.sp,
+                  color: Theme.of(context).textTheme.bodySmall?.color,
+                ),
+              ),
+              SizedBox(height: 12.h),
+              _buildDataSourcePicker(context),
               SizedBox(height: 24.h),
 
               // Unit System Section

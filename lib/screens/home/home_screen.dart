@@ -12,6 +12,7 @@ import 'package:kindura_ai/screens/conservation/conservation_screen.dart';
 import 'package:kindura_ai/screens/bottom_navigation/bottom_navigation_controller.dart';
 import 'package:kindura_ai/res/routes/routes_name.dart';
 import 'package:kindura_ai/services/theme_service.dart';
+import 'package:kindura_ai/models/health/data_source_mode.dart';
 
 class Home extends StatefulWidget {
   const Home({super.key});
@@ -422,7 +423,7 @@ class _HomeState extends State<Home> with SingleTickerProviderStateMixin {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header with data source indicator
+            // Header with data source mode indicator
             Row(
               children: [
                 Container(
@@ -432,7 +433,13 @@ class _HomeState extends State<Home> with SingleTickerProviderStateMixin {
                     color: Colors.red.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(6.w),
                   ),
-                  child: Icon(Icons.watch, color: Colors.red, size: 14.sp),
+                  child: Icon(
+                    homeController.dataSourceMode.value == DataSourceMode.appleWatch
+                        ? Icons.watch
+                        : Icons.favorite,
+                    color: Colors.red,
+                    size: 14.sp,
+                  ),
                 ),
                 SizedBox(width: 6.w),
                 Text(
@@ -444,43 +451,43 @@ class _HomeState extends State<Home> with SingleTickerProviderStateMixin {
                   ),
                 ),
                 SizedBox(width: 4.w),
-                // Data source indicator
+                // Data source mode indicator
                 Container(
-                  padding: EdgeInsets.symmetric(horizontal: 4.w, vertical: 1.h),
+                  padding: EdgeInsets.symmetric(horizontal: 6.w, vertical: 2.h),
                   decoration: BoxDecoration(
-                    color: source == 'apple_health'
-                        ? Colors.green.withOpacity(0.1)
-                        : source == 'api'
-                            ? Colors.blue.withOpacity(0.1)
+                    color: homeController.dataSourceMode.value == DataSourceMode.appleWatch
+                        ? Colors.blue.withOpacity(0.1)
+                        : homeController.dataSourceMode.value == DataSourceMode.healthKitOnly
+                            ? Colors.green.withOpacity(0.1)
                             : Colors.grey.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(4.w),
+                    borderRadius: BorderRadius.circular(8.w),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
-                        source == 'apple_health'
-                            ? Icons.favorite
-                            : source == 'api'
-                                ? Icons.cloud
-                                : Icons.sync,
-                        size: 8.sp,
-                        color: source == 'apple_health'
-                            ? Colors.green
-                            : source == 'api'
-                                ? Colors.blue
+                        homeController.dataSourceMode.value == DataSourceMode.appleWatch
+                            ? Icons.watch
+                            : homeController.dataSourceMode.value == DataSourceMode.healthKitOnly
+                                ? Icons.favorite
+                                : Icons.edit,
+                        size: 10.sp,
+                        color: homeController.dataSourceMode.value == DataSourceMode.appleWatch
+                            ? Colors.blue
+                            : homeController.dataSourceMode.value == DataSourceMode.healthKitOnly
+                                ? Colors.green
                                 : Colors.grey,
                       ),
-                      SizedBox(width: 2.w),
+                      SizedBox(width: 3.w),
                       Text(
-                        source == 'apple_health' ? 'Live' : source == 'api' ? 'API' : 'Sync',
+                        homeController.dataSourceDisplayName,
                         style: TextStyle(
-                          fontSize: 7.sp,
+                          fontSize: 8.sp,
                           fontWeight: FontWeight.w500,
-                          color: source == 'apple_health'
-                              ? Colors.green
-                              : source == 'api'
-                                  ? Colors.blue
+                          color: homeController.dataSourceMode.value == DataSourceMode.appleWatch
+                              ? Colors.blue
+                              : homeController.dataSourceMode.value == DataSourceMode.healthKitOnly
+                                  ? Colors.green
                                   : Colors.grey,
                         ),
                       ),
@@ -488,7 +495,8 @@ class _HomeState extends State<Home> with SingleTickerProviderStateMixin {
                   ),
                 ),
                 Spacer(),
-                if (fallDetected || fallsCount > 0)
+                // Fall alert badge - only show when fall detection is supported and detected
+                if (homeController.supportsFallDetection && (fallDetected || fallsCount > 0))
                   Container(
                     padding: EdgeInsets.symmetric(horizontal: 6.w, vertical: 2.h),
                     decoration: BoxDecoration(
@@ -677,15 +685,19 @@ class _HomeState extends State<Home> with SingleTickerProviderStateMixin {
               ),
             ],
 
-            // FALL DETECTION SECTION - Always show
+            // FALL DETECTION SECTION - Conditional based on data source mode
             SizedBox(height: 8.h),
             Divider(height: 1, color: subtextColor.withOpacity(0.2)),
             SizedBox(height: 6.h),
             Row(
               children: [
                 Icon(
-                  fallDetected ? Icons.warning_amber_rounded : Icons.health_and_safety,
-                  color: fallDetected ? Colors.red : Colors.green,
+                  homeController.supportsFallDetection
+                      ? (fallDetected ? Icons.warning_amber_rounded : Icons.health_and_safety)
+                      : Icons.info_outline,
+                  color: homeController.supportsFallDetection
+                      ? (fallDetected ? Colors.red : Colors.green)
+                      : Colors.grey,
                   size: 12.sp,
                 ),
                 SizedBox(width: 4.w),
@@ -698,52 +710,78 @@ class _HomeState extends State<Home> with SingleTickerProviderStateMixin {
                   ),
                 ),
                 Spacer(),
-                Container(
-                  padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 3.h),
-                  decoration: BoxDecoration(
-                    color: (fallDetected || fallsCount > 0)
-                        ? Colors.red.withOpacity(0.1)
-                        : Colors.green.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12.w),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (fallDetected) ...[
-                        Icon(Icons.warning, color: Colors.red, size: 10.sp),
+                // Show different content based on whether fall detection is supported
+                if (homeController.supportsFallDetection)
+                  Container(
+                    padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 3.h),
+                    decoration: BoxDecoration(
+                      color: (fallDetected || fallsCount > 0)
+                          ? Colors.red.withOpacity(0.1)
+                          : Colors.green.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12.w),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (fallDetected) ...[
+                          Icon(Icons.warning, color: Colors.red, size: 10.sp),
+                          SizedBox(width: 4.w),
+                          Text(
+                            'Fall Detected!',
+                            style: TextStyle(
+                              fontSize: 9.sp,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.red,
+                            ),
+                          ),
+                        ] else if (fallsCount > 0) ...[
+                          Text(
+                            '$fallsCount today',
+                            style: TextStyle(
+                              fontSize: 9.sp,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.red,
+                            ),
+                          ),
+                        ] else ...[
+                          Icon(Icons.check_circle, color: Colors.green, size: 10.sp),
+                          SizedBox(width: 4.w),
+                          Text(
+                            'No falls',
+                            style: TextStyle(
+                              fontSize: 9.sp,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.green,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  )
+                else
+                  // Fall detection not available (HealthKit-only mode)
+                  Container(
+                    padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 3.h),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12.w),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.watch_off, color: Colors.grey, size: 10.sp),
                         SizedBox(width: 4.w),
                         Text(
-                          'Fall Detected!',
-                          style: TextStyle(
-                            fontSize: 9.sp,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.red,
-                          ),
-                        ),
-                      ] else if (fallsCount > 0) ...[
-                        Text(
-                          '$fallsCount today',
+                          'Requires Apple Watch',
                           style: TextStyle(
                             fontSize: 9.sp,
                             fontWeight: FontWeight.w500,
-                            color: Colors.red,
-                          ),
-                        ),
-                      ] else ...[
-                        Icon(Icons.check_circle, color: Colors.green, size: 10.sp),
-                        SizedBox(width: 4.w),
-                        Text(
-                          'No falls',
-                          style: TextStyle(
-                            fontSize: 9.sp,
-                            fontWeight: FontWeight.w500,
-                            color: Colors.green,
+                            color: Colors.grey,
                           ),
                         ),
                       ],
-                    ],
+                    ),
                   ),
-                ),
               ],
             ),
           ],

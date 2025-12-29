@@ -16,6 +16,7 @@ import 'package:intl/intl.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:kindura_ai/screens/medication/medication_controller.dart';
 import 'package:kindura_ai/services/watch_vitals_service.dart';
+import 'package:kindura_ai/models/health/data_source_mode.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 class HomeController extends GetxController {
@@ -88,6 +89,18 @@ class HomeController extends GetxController {
   RxBool isListening = false.obs;
   RxBool hasTriggered = false.obs;
   String recognizedText = "";
+
+  // Data source mode tracking
+  final Rx<DataSourceMode> dataSourceMode = DataSourceMode.healthKitOnly.obs;
+
+  /// Check if current mode supports fall detection (Apple Watch only)
+  bool get supportsFallDetection => dataSourceMode.value.supportsFallDetection;
+
+  /// Check if current mode supports real-time heart rate (Apple Watch only)
+  bool get supportsRealTimeHeartRate => dataSourceMode.value.supportsRealTimeHeartRate;
+
+  /// Get the display name for the current data source
+  String get dataSourceDisplayName => dataSourceMode.value.displayName;
 
   @override
   void onInit() async {
@@ -343,11 +356,41 @@ class HomeController extends GetxController {
     _watchVitalsService = WatchVitalsService();
     _isWatchVitalsServiceInitialized = true;
 
-    // Sync configuration to Apple Watch after login
-    // This sends the API base URL and auth token to the Watch
-    await _syncWatchConfiguration();
+    // STEP 1: Detect data source mode (Apple Watch, HealthKit only, or Manual)
+    final detectedMode = await _watchVitalsService!.detectDataSourceMode();
+    dataSourceMode.value = detectedMode;
+    print('[HomeController] 🔍 Data source mode detected: ${detectedMode.displayName}');
 
-    // Listen for real-time Watch vitals updates
+    // STEP 2: Configure based on detected mode
+    if (detectedMode == DataSourceMode.appleWatch) {
+      // Full Apple Watch integration
+      print('[HomeController] ⌚ Apple Watch mode - enabling full Watch integration');
+      await _syncWatchConfiguration();
+      _setupWatchCallbacks();
+    } else if (detectedMode == DataSourceMode.healthKitOnly) {
+      print('[HomeController] ❤️ HealthKit-only mode - using Oura, Whoop, Ultrahuman, etc.');
+    } else {
+      print('[HomeController] 📝 Manual-only mode - no health device integration');
+    }
+
+    // STEP 3: Always setup HealthKit callbacks (works for both Apple Watch and HealthKit-only modes)
+    if (detectedMode != DataSourceMode.manualOnly) {
+      _setupHealthKitCallbacks();
+    }
+
+    // STEP 4: Start HealthKit observers for event-driven updates
+    if (detectedMode != DataSourceMode.manualOnly) {
+      await _watchVitalsService!.startHealthKitObservers();
+      print('[HomeController] 🔔 HealthKit observers started');
+    }
+  }
+
+  /// Setup callbacks specific to Apple Watch mode
+  /// Only called when Watch is paired and active
+  void _setupWatchCallbacks() {
+    if (_watchVitalsService == null) return;
+
+    // Listen for real-time Watch vitals updates via WCSession
     _watchVitalsService!.onVitalsReceived = (vitals) {
       print('[HomeController] ⌚️ Watch vitals received in REAL-TIME: $vitals');
 
@@ -375,7 +418,7 @@ class HomeController extends GetxController {
       updatedVitals['exercise_minutes'] = vitals['exercise_minutes'] ?? updatedVitals['exercise_minutes'] ?? 0;
       updatedVitals['floors_climbed'] = vitals['floors_climbed'] ?? updatedVitals['floors_climbed'] ?? 0;
 
-      // Falls
+      // Falls (only available with Apple Watch)
       updatedVitals['fall_detected'] = vitals['fall_detected'] ?? false;
       updatedVitals['falls_count'] = vitals['falls_count'] ?? updatedVitals['falls_count'] ?? 0;
 
@@ -389,19 +432,48 @@ class HomeController extends GetxController {
       print('[HomeController] ✅ UI updated with real-time Watch vitals');
     };
 
-    // Listen for fall detection events - handle with priority
+    // Listen for fall detection events - handle with priority (Apple Watch only feature)
     _watchVitalsService!.onFallDetected = (vitals) {
       print('[HomeController] ⚠️ FALL DETECTED from Watch!');
       _handleFallDetection(vitals);
     };
+  }
+
+  /// Setup callbacks for HealthKit data changes
+  /// Called for both Apple Watch and HealthKit-only modes
+  void _setupHealthKitCallbacks() {
+    if (_watchVitalsService == null) return;
 
     // Listen for HealthKit data changes (event-driven updates)
     // This is triggered by HKObserverQuery when health data changes in HealthKit
+    // Works with any HealthKit-compatible device: Apple Watch, Oura, Whoop, Ultrahuman, etc.
     _watchVitalsService!.onHealthKitDataChanged = (type) {
       print('[HomeController] 🔔 HealthKit data changed: $type - refreshing...');
       // Refresh health data from Apple Health when any data changes
       _refreshHealthDataFromHealthKit(type);
     };
+  }
+
+  /// Change the data source mode (for user override in Settings)
+  Future<void> setDataSourceMode(DataSourceMode? mode) async {
+    if (_watchVitalsService == null) return;
+
+    await _watchVitalsService!.setUserOverride(mode);
+
+    // Re-detect to get the effective mode
+    final effectiveMode = await _watchVitalsService!.detectDataSourceMode();
+    dataSourceMode.value = effectiveMode;
+    print('[HomeController] 👤 Data source mode changed to: ${effectiveMode.displayName}');
+
+    // Reinitialize based on new mode
+    await _initWatchVitalsService();
+    await loadWatchVitals();
+  }
+
+  /// Get available data source options for Settings UI
+  Future<List<DataSourceOption>> getAvailableDataSources() async {
+    if (_watchVitalsService == null) return [];
+    return await _watchVitalsService!.getAvailableDataSources();
   }
 
   /// Refresh health data from Apple Health when HealthKit observer fires
