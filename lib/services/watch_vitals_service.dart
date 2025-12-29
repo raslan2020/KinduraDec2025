@@ -1,4 +1,5 @@
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:kindura_ai/repository/home_repository/home_repository.dart';
 import 'package:kindura_ai/user_preference/user_preferences_view_model.dart';
 import 'package:kindura_ai/res/app_url/app_url.dart';
@@ -502,18 +503,20 @@ class WatchVitalsService {
   Future<void> setUserOverride(DataSourceMode? mode) async {
     _userOverrideMode = mode;
 
+    final prefs = await SharedPreferences.getInstance();
     if (mode != null) {
-      await _userPreferences.setString('data_source_override', mode.toStorageString());
+      await prefs.setString('data_source_override', mode.toStorageString());
       print('[WatchVitalsService] 👤 User override set: ${mode.displayName}');
     } else {
-      await _userPreferences.remove('data_source_override');
+      await prefs.remove('data_source_override');
       print('[WatchVitalsService] 👤 User override cleared - using auto-detect');
     }
   }
 
   /// Load user override preference from storage
   Future<DataSourceMode?> _loadUserOverride() async {
-    final stored = await _userPreferences.getString('data_source_override');
+    final prefs = await SharedPreferences.getInstance();
+    final stored = prefs.getString('data_source_override');
     if (stored != null && stored.isNotEmpty) {
       return DataSourceModeExtension.fromStorageString(stored);
     }

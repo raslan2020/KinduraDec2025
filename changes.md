@@ -4,6 +4,53 @@
 
 ---
 
+## 2025-12-29 - Multi-Device Health Data Architecture
+
+### Problem
+Previous architecture assumed Apple Watch was the primary data source. Users with other devices (Oura Ring, Ultrahuman, Whoop, etc.) needed a HealthKit-only mode.
+
+### Solution: DataSourceMode System
+Added intelligent mode detection to support multiple health data sources:
+
+**New Enum**: `lib/models/health/data_source_mode.dart`
+- `appleWatch` - Watch paired, use WCSession + HealthKit
+- `healthKitOnly` - No Watch, use HealthKit only (Oura, Whoop, Ultrahuman, etc.)
+- `manualOnly` - User enters data manually
+
+**Auto-Detection Flow**:
+1. App checks if Apple Watch is paired via WCSession
+2. If paired → `appleWatch` mode (full Watch integration)
+3. If not paired → check HealthKit authorization → `healthKitOnly` mode
+4. If neither → `manualOnly` mode
+
+**User Override**: Settings allow manual override of auto-detection
+
+### Files Modified
+- `lib/models/health/data_source_mode.dart` (NEW) - DataSourceMode enum with extensions
+- `lib/services/watch_vitals_service.dart` - Added mode detection, user override, storage
+- `lib/screens/home/home_controller.dart` - Conditional setup based on mode
+- `lib/screens/home/home_screen.dart` - Data source indicator, conditional falls section
+- `lib/screens/profile/profile_screen.dart` - Data source picker in Settings
+
+### UI Changes
+- Health card header shows current data source (Apple Watch / Apple Health)
+- Falls section shows "Requires Apple Watch" when in HealthKit-only mode
+- Settings dialog includes Health Data Source picker with 4 options:
+  - Auto-detect (Recommended)
+  - Apple Watch
+  - Apple Health Only
+  - Manual Entry
+
+### Feature Availability by Mode
+| Feature | Apple Watch | HealthKit-Only | Manual |
+|---------|-------------|----------------|--------|
+| WCSession | ✅ | ❌ | ❌ |
+| HealthKit Observers | ✅ | ✅ | ❌ |
+| Fall Detection | ✅ | ❌ | ❌ |
+| Real-time HR | ✅ | ⚠️ Delayed | ❌ |
+
+---
+
 ## 2025-12-29 - Event-Driven Health Updates & UI Improvements
 
 ### Event-Driven Health Updates (Removed 30s Refresh)

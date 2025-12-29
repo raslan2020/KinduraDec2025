@@ -92,6 +92,7 @@ class HomeController extends GetxController {
 
   // Data source mode tracking
   final Rx<DataSourceMode> dataSourceMode = DataSourceMode.healthKitOnly.obs;
+  final RxBool hasDataSourceOverride = false.obs;
 
   /// Check if current mode supports fall detection (Apple Watch only)
   bool get supportsFallDetection => dataSourceMode.value.supportsFallDetection;
@@ -359,6 +360,7 @@ class HomeController extends GetxController {
     // STEP 1: Detect data source mode (Apple Watch, HealthKit only, or Manual)
     final detectedMode = await _watchVitalsService!.detectDataSourceMode();
     dataSourceMode.value = detectedMode;
+    hasDataSourceOverride.value = _watchVitalsService!.hasUserOverride;
     print('[HomeController] 🔍 Data source mode detected: ${detectedMode.displayName}');
 
     // STEP 2: Configure based on detected mode
@@ -459,6 +461,9 @@ class HomeController extends GetxController {
     if (_watchVitalsService == null) return;
 
     await _watchVitalsService!.setUserOverride(mode);
+
+    // Update override flag
+    hasDataSourceOverride.value = mode != null;
 
     // Re-detect to get the effective mode
     final effectiveMode = await _watchVitalsService!.detectDataSourceMode();

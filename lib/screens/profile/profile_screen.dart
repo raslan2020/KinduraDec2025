@@ -1216,4 +1216,188 @@ class _ProfileScreenState extends State<ProfileScreen> {
       barrierDismissible: true,
     );
   }
+
+  // MARK: - Data Source Picker Widget
+
+  Widget _buildDataSourcePicker(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    // Check if HomeController is registered
+    if (!Get.isRegistered<HomeController>()) {
+      return Container(
+        padding: EdgeInsets.all(12.w),
+        decoration: BoxDecoration(
+          border: Border.all(color: AppColor.gray500),
+          borderRadius: BorderRadius.circular(8.w),
+        ),
+        child: Text(
+          'Health data source settings not available',
+          style: TextStyle(
+            color: Theme.of(context).textTheme.bodySmall?.color,
+            fontSize: 12.sp,
+          ),
+        ),
+      );
+    }
+
+    final homeController = Get.find<HomeController>();
+
+    return Obx(() {
+      final currentMode = homeController.dataSourceMode.value;
+
+      return Container(
+        decoration: BoxDecoration(
+          border: Border.all(color: AppColor.gray500),
+          borderRadius: BorderRadius.circular(8.w),
+        ),
+        child: Column(
+          children: [
+            // Auto-detect option
+            _buildDataSourceOption(
+              context: context,
+              icon: Icons.auto_mode,
+              title: 'Auto-detect',
+              subtitle: 'Automatically use Watch if paired',
+              color: Colors.purple,
+              isSelected: !homeController.hasDataSourceOverride.value,
+              onTap: () async {
+                await homeController.setDataSourceMode(null);
+                Get.back();
+                Get.snackbar(
+                  'Data Source Updated',
+                  'Now using auto-detection',
+                  snackPosition: SnackPosition.BOTTOM,
+                  backgroundColor: Colors.green.withOpacity(0.9),
+                  colorText: Colors.white,
+                );
+              },
+            ),
+            Divider(height: 1, color: AppColor.gray500),
+            // Apple Watch option
+            _buildDataSourceOption(
+              context: context,
+              icon: Icons.watch,
+              title: 'Apple Watch',
+              subtitle: 'Real-time vitals & fall detection',
+              color: Colors.blue,
+              isSelected: currentMode == DataSourceMode.appleWatch,
+              onTap: () async {
+                await homeController.setDataSourceMode(DataSourceMode.appleWatch);
+                Get.back();
+                Get.snackbar(
+                  'Data Source Updated',
+                  'Now using Apple Watch mode',
+                  snackPosition: SnackPosition.BOTTOM,
+                  backgroundColor: Colors.green.withOpacity(0.9),
+                  colorText: Colors.white,
+                );
+              },
+            ),
+            Divider(height: 1, color: AppColor.gray500),
+            // Apple Health Only option
+            _buildDataSourceOption(
+              context: context,
+              icon: Icons.favorite,
+              title: 'Apple Health Only',
+              subtitle: 'Oura, Whoop, Ultrahuman, etc.',
+              color: Colors.green,
+              isSelected: currentMode == DataSourceMode.healthKitOnly,
+              onTap: () async {
+                await homeController.setDataSourceMode(DataSourceMode.healthKitOnly);
+                Get.back();
+                Get.snackbar(
+                  'Data Source Updated',
+                  'Now using Apple Health only',
+                  snackPosition: SnackPosition.BOTTOM,
+                  backgroundColor: Colors.green.withOpacity(0.9),
+                  colorText: Colors.white,
+                );
+              },
+            ),
+            Divider(height: 1, color: AppColor.gray500),
+            // Manual Entry option
+            _buildDataSourceOption(
+              context: context,
+              icon: Icons.edit,
+              title: 'Manual Entry',
+              subtitle: 'Enter health data manually',
+              color: Colors.grey,
+              isSelected: currentMode == DataSourceMode.manualOnly,
+              onTap: () async {
+                await homeController.setDataSourceMode(DataSourceMode.manualOnly);
+                Get.back();
+                Get.snackbar(
+                  'Data Source Updated',
+                  'Now using manual entry mode',
+                  snackPosition: SnackPosition.BOTTOM,
+                  backgroundColor: Colors.green.withOpacity(0.9),
+                  colorText: Colors.white,
+                );
+              },
+            ),
+          ],
+        ),
+      );
+    });
+  }
+
+  Widget _buildDataSourceOption({
+    required BuildContext context,
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required Color color,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
+        color: isSelected
+            ? color.withOpacity(isDark ? 0.2 : 0.1)
+            : Colors.transparent,
+        child: Row(
+          children: [
+            Container(
+              width: 36.w,
+              height: 36.w,
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8.w),
+              ),
+              child: Icon(icon, color: color, size: 20.sp),
+            ),
+            SizedBox(width: 12.w),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      color: Theme.of(context).textTheme.bodyLarge?.color,
+                      fontSize: 14.sp,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      color: Theme.of(context).textTheme.bodySmall?.color,
+                      fontSize: 11.sp,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (isSelected)
+              Icon(Icons.check_circle, color: color, size: 20.sp),
+          ],
+        ),
+      ),
+    );
+  }
 }
