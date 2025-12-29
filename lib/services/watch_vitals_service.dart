@@ -2,17 +2,37 @@ import 'package:flutter/services.dart';
 import 'package:kindura_ai/repository/home_repository/home_repository.dart';
 import 'package:kindura_ai/user_preference/user_preferences_view_model.dart';
 import 'package:kindura_ai/res/app_url/app_url.dart';
+import 'package:kindura_ai/models/health/data_source_mode.dart';
 
 /// Service to handle Watch vitals data from iOS native layer
-/// Receives data via WatchConnectivity and sends to Django API
+/// Supports multiple data sources:
+/// - Apple Watch via WCSession (real-time vitals, fall detection)
+/// - HealthKit only (for Oura, Whoop, Ultrahuman, etc.)
+/// - Manual entry
 class WatchVitalsService {
   static const MethodChannel _channel = MethodChannel('com.kindura.ai/watch_vitals');
   final HomeRepository _homeRepository = HomeRepository();
   final UserPreferences _userPreferences = UserPreferences();
 
+  // Current data source mode
+  DataSourceMode _currentMode = DataSourceMode.healthKitOnly;
+  bool _modeDetected = false;
+
+  // User override preference (null = auto-detect)
+  DataSourceMode? _userOverrideMode;
+
   Function(Map<String, dynamic>)? onVitalsReceived;
   Function(Map<String, dynamic>)? onFallDetected;
   Function(String type)? onHealthKitDataChanged;
+
+  /// Get the current data source mode
+  DataSourceMode get currentMode => _userOverrideMode ?? _currentMode;
+
+  /// Check if mode has been detected
+  bool get isModeDetected => _modeDetected;
+
+  /// Check if user has set a manual override
+  bool get hasUserOverride => _userOverrideMode != null;
 
   WatchVitalsService() {
     _setupMethodCallHandler();
@@ -431,7 +451,136 @@ class WatchVitalsService {
     }
   }
 
+  // MARK: - Data Source Mode Detection & Management
+
+  /// Detect the appropriate data source mode based on available devices
+  /// Call this on app startup to determine how to fetch health data
+  ///
+  /// Priority:
+  /// 1. User override (if set in Settings)
+  /// 2. Apple Watch (if paired and app installed)
+  /// 3. HealthKit (if authorized)
+  /// 4. Manual only (fallback)
+  Future<DataSourceMode> detectDataSourceMode() async {
+    print('[WatchVitalsService] 🔍 Detecting data source mode...');
+
+    // Check for user override first
+    final savedOverride = await _loadUserOverride();
+    if (savedOverride != null) {
+      _userOverrideMode = savedOverride;
+      print('[WatchVitalsService] 👤 User override active: ${savedOverride.displayName}');
+      _modeDetected = true;
+      return savedOverride;
+    }
+
+    // Auto-detect based on available devices
+    try {
+      final isPaired = await isWatchPaired();
+      final isHealthKitAuth = await isHealthKitAuthorized();
+
+      if (isPaired) {
+        _currentMode = DataSourceMode.appleWatch;
+        print('[WatchVitalsService] ⌚ Apple Watch detected - using Watch mode');
+      } else if (isHealthKitAuth) {
+        _currentMode = DataSourceMode.healthKitOnly;
+        print('[WatchVitalsService] ❤️ No Watch - using HealthKit only mode (Oura, Whoop, etc.)');
+      } else {
+        _currentMode = DataSourceMode.manualOnly;
+        print('[WatchVitalsService] 📝 No devices - using manual entry mode');
+      }
+    } catch (e) {
+      print('[WatchVitalsService] Error detecting mode: $e - defaulting to HealthKit');
+      _currentMode = DataSourceMode.healthKitOnly;
+    }
+
+    _modeDetected = true;
+    return _currentMode;
+  }
+
+  /// Set user override for data source mode
+  /// Pass null to clear override and return to auto-detect
+  Future<void> setUserOverride(DataSourceMode? mode) async {
+    _userOverrideMode = mode;
+
+    if (mode != null) {
+      await _userPreferences.setString('data_source_override', mode.toStorageString());
+      print('[WatchVitalsService] 👤 User override set: ${mode.displayName}');
+    } else {
+      await _userPreferences.remove('data_source_override');
+      print('[WatchVitalsService] 👤 User override cleared - using auto-detect');
+    }
+  }
+
+  /// Load user override preference from storage
+  Future<DataSourceMode?> _loadUserOverride() async {
+    final stored = await _userPreferences.getString('data_source_override');
+    if (stored != null && stored.isNotEmpty) {
+      return DataSourceModeExtension.fromStorageString(stored);
+    }
+    return null;
+  }
+
+  /// Check if current mode supports fall detection
+  bool get supportsFallDetection => currentMode.supportsFallDetection;
+
+  /// Check if current mode supports real-time heart rate
+  bool get supportsRealTimeHeartRate => currentMode.supportsRealTimeHeartRate;
+
+  /// Get available data source options for Settings UI
+  Future<List<DataSourceOption>> getAvailableDataSources() async {
+    final isPaired = await isWatchPaired();
+    final isHealthKitAuth = await isHealthKitAuthorized();
+
+    return [
+      DataSourceOption(
+        mode: null, // null = auto-detect
+        label: 'Auto-detect',
+        description: 'Automatically use Watch if paired',
+        isAvailable: true,
+        isSelected: _userOverrideMode == null,
+      ),
+      DataSourceOption(
+        mode: DataSourceMode.appleWatch,
+        label: 'Apple Watch',
+        description: 'Real-time vitals & fall detection',
+        isAvailable: isPaired,
+        isSelected: _userOverrideMode == DataSourceMode.appleWatch,
+      ),
+      DataSourceOption(
+        mode: DataSourceMode.healthKitOnly,
+        label: 'Apple Health Only',
+        description: 'Oura, Whoop, Ultrahuman, etc.',
+        isAvailable: isHealthKitAuth,
+        isSelected: _userOverrideMode == DataSourceMode.healthKitOnly,
+      ),
+      DataSourceOption(
+        mode: DataSourceMode.manualOnly,
+        label: 'Manual Entry',
+        description: 'Enter health data manually',
+        isAvailable: true,
+        isSelected: _userOverrideMode == DataSourceMode.manualOnly,
+      ),
+    ];
+  }
+
   void dispose() {
     _channel.setMethodCallHandler(null);
   }
+}
+
+/// Represents a data source option for Settings UI
+class DataSourceOption {
+  final DataSourceMode? mode; // null = auto-detect
+  final String label;
+  final String description;
+  final bool isAvailable;
+  final bool isSelected;
+
+  DataSourceOption({
+    required this.mode,
+    required this.label,
+    required this.description,
+    required this.isAvailable,
+    required this.isSelected,
+  });
 }
