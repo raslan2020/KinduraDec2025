@@ -15,6 +15,9 @@
 /// 3. LiveKit - Real-time voice communication with AI agent
 /// 4. Token-based Auth - REST API authentication
 ///
+/// RESILIENCE: App is designed to start even without network connectivity.
+/// Network errors are handled gracefully without crashes.
+///
 /// @see /docs/DEVELOPER_GUIDE.md for full documentation
 /// ============================================================================
 
@@ -24,7 +27,6 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
 import 'package:kindura_ai/res/routes/routes.dart';
 import 'package:kindura_ai/screens/splash_screen/splash_screen.dart';
-import 'package:kindura_ai/screens/home/home_controller.dart';
 import 'package:kindura_ai/services/notification_service.dart';
 import 'package:kindura_ai/services/voice_service.dart';
 import 'package:kindura_ai/services/theme_service.dart';
@@ -37,6 +39,10 @@ import 'package:kindura_ai/utils/file_logger.dart';
 /// 2. File logger setup for debugging
 /// 3. Core services registration with GetX DI (permanent: true means singleton)
 /// 4. Launch the app with MyApp widget
+///
+/// NOTE: HomeController is NOT initialized here - it's lazily initialized
+/// when the user navigates to the main screen after login. This prevents
+/// network-related crashes on app startup.
 void main() async {
   // Required for async operations before runApp()
   WidgetsFlutterBinding.ensureInitialized();
@@ -48,46 +54,44 @@ void main() async {
     await FileLogger.logAppLifecycle('App Started');
   } catch (e) {
     print('FileLogger initialization failed: $e');
+    // Non-critical - continue without logging
   }
 
   // =========================================================================
-  // DEPENDENCY INJECTION - WITH ERROR HANDLING
+  // DEPENDENCY INJECTION - LOCAL SERVICES ONLY
   // =========================================================================
   // Register core services as singletons using GetX.
   // permanent: true ensures they persist throughout app lifecycle.
   //
-  // Each service is wrapped in try-catch to prevent app crashes
+  // IMPORTANT: Only register services that don't require network calls.
+  // Network-dependent controllers (like HomeController) are lazily loaded
+  // when the user navigates to the appropriate screen.
   // =========================================================================
 
-  // ThemeService: Manages dark/light mode switching
+  // ThemeService: Manages dark/light mode switching (local only)
   try {
     Get.put(ThemeService(), permanent: true);
   } catch (e) {
     print('ThemeService initialization failed: $e');
   }
 
-  // NotificationService: Handles local push notifications for medication reminders
+  // NotificationService: Handles local push notifications (local only)
   try {
     Get.put(NotificationService(), permanent: true);
   } catch (e) {
     print('NotificationService initialization failed: $e');
   }
 
-  // VoiceService: Manages speech recognition for "Hey Kindura" trigger
+  // VoiceService: Manages speech recognition (local only)
   try {
     Get.put(VoiceService(), permanent: true);
   } catch (e) {
     print('VoiceService initialization failed: $e');
   }
 
-  // HomeController: Central controller for dashboard and LiveKit voice connection
-  // Registered early because the mic button in bottom navigation needs it
-  // This controller now handles backend connection failures gracefully
-  try {
-    Get.put(HomeController(), permanent: true);
-  } catch (e) {
-    print('HomeController initialization failed: $e');
-  }
+  // NOTE: HomeController is NOT registered here.
+  // It will be lazily initialized when the user navigates to main_screen.dart
+  // This prevents network errors from crashing the app on startup.
 
   runApp(const MyApp());
 }

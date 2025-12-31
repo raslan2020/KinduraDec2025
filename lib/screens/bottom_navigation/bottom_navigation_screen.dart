@@ -17,7 +17,14 @@ import 'package:kindura_ai/services/theme_service.dart';
 class MainPage extends StatelessWidget {
   final BottomNavController controller = Get.put(BottomNavController());
 
-  HomeController get homeController => Get.find<HomeController>();
+  /// Lazily get or create HomeController
+  /// Uses Get.put with permanent: true to keep it alive
+  HomeController get homeController {
+    if (!Get.isRegistered<HomeController>()) {
+      Get.put(HomeController(), permanent: true);
+    }
+    return Get.find<HomeController>();
+  }
 
   // Mic button colors
   final peachColor = const Color(0xFFF9A58A);

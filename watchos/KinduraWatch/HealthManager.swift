@@ -168,6 +168,48 @@ class HealthManager: NSObject, ObservableObject, WCSessionDelegate, HKWorkoutSes
                 return
             }
 
+            // Handle remote workout control from iPhone
+            if let command = message["command"] as? String {
+                switch command {
+                case "start_workout":
+                    print("[HealthManager] 📲 Received start_workout command from iPhone")
+                    if !self.isWorkoutActive {
+                        self.startWorkoutSession()
+                        self.startRealTimeMonitoring()
+                        self.startFallDetection()
+                        replyHandler(["status": "workout_started", "isWorkoutActive": true])
+                    } else {
+                        replyHandler(["status": "workout_already_active", "isWorkoutActive": true])
+                    }
+                    return
+
+                case "stop_workout":
+                    print("[HealthManager] 📲 Received stop_workout command from iPhone")
+                    if self.isWorkoutActive {
+                        self.stopWorkoutSession()
+                        replyHandler(["status": "workout_stopped", "isWorkoutActive": false])
+                    } else {
+                        replyHandler(["status": "workout_not_active", "isWorkoutActive": false])
+                    }
+                    return
+
+                case "get_status":
+                    replyHandler([
+                        "status": "ok",
+                        "isWorkoutActive": self.isWorkoutActive,
+                        "isRealTimeMonitoring": self.isRealTimeMonitoring,
+                        "heartRate": self.heartRate,
+                        "bloodOxygen": self.bloodOxygen,
+                        "hrv": self.hrv,
+                        "respiratoryRate": self.respiratoryRate
+                    ])
+                    return
+
+                default:
+                    print("[HealthManager] Unknown command: \(command)")
+                }
+            }
+
             replyHandler(["status": "received"])
         }
     }
@@ -387,12 +429,18 @@ class HealthManager: NSObject, ObservableObject, WCSessionDelegate, HKWorkoutSes
         startRealTimeBloodOxygenQuery()
         startRealTimeHRVQuery()
 
-        // Also use a timer to periodically refresh data
-        refreshTimer = Timer.scheduledTimer(withTimeInterval: 10.0, repeats: true) { [weak self] _ in
+        // Use a timer to periodically refresh data AND send to iPhone
+        // This ensures iPhone always gets latest data even if values haven't changed
+        refreshTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
             self?.fetchLatestVitals()
+            // Always send current vitals to iPhone every 5 seconds for real-time sync
+            self?.sendVitalsToiPhone()
         }
 
-        print("[HealthManager] ✅ Real-time monitoring started")
+        // Send initial vitals immediately
+        sendVitalsToiPhone()
+
+        print("[HealthManager] ✅ Real-time monitoring started (5-second sync enabled)")
     }
 
     func stopRealTimeMonitoring() {

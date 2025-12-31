@@ -1,6 +1,123 @@
 # Kindura Development Changes Log
 
-**Last Updated**: 2025-12-29
+**Last Updated**: 2025-12-30
+
+---
+
+## 2025-12-30 - App Resilience & Crash Prevention
+
+### Problem
+App showed white screen when reopened after manual close. Network errors or backend unavailability caused app crashes.
+
+### Solution: Resilient App Startup
+
+**1. Splash Screen Improvements** (`lib/screens/splash_screen/`)
+- Added 5-second safety timeout - app ALWAYS navigates somewhere
+- Error handling in `isLogin()` - catches all exceptions
+- Prevents double navigation
+- Shows loading indicator with status message
+
+**2. Lazy Controller Initialization** (`lib/main.dart`)
+- Removed `HomeController` from main.dart startup
+- Network-dependent controllers now lazily initialized when needed
+- Only local services (ThemeService, NotificationService, VoiceService) registered at startup
+
+**3. Lazy HomeController Loading** (`lib/screens/bottom_navigation/` & `lib/screens/home/`)
+- `Get.isRegistered<HomeController>()` check before access
+- `Get.put()` only called if controller not already registered
+- Prevents crashes from missing controller
+
+**4. Login Error Handling** (`lib/screens/login/login_controller.dart`)
+- User-friendly error messages for network issues
+- Handles SocketException, timeout, connection refused
+- Never shows raw error messages to user
+
+### App Data Strategy
+```
+┌─────────────────────────────────────────────────────────────┐
+│                   PRIMARY: Apple Health (HealthKit)          │
+│  - Always the main data source                               │
+│  - Works with Oura, Whoop, Ultrahuman, and any HealthKit app│
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│           SECONDARY: Apple Watch (if paired)                 │
+│  - Real-time vitals updates via WCSession                   │
+│  - Fall detection (Watch-exclusive feature)                  │
+│  - Supplements HealthKit data, doesn't replace it           │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Files Modified
+- `lib/main.dart` - Removed HomeController from startup
+- `lib/screens/splash_screen/splash_screen.dart` - Loading indicator, status message
+- `lib/screens/splash_screen/splash_controller.dart` - Safety timeout, error handling
+- `lib/screens/login/login_controller.dart` - Better error messages
+- `lib/screens/bottom_navigation/bottom_navigation_screen.dart` - Lazy HomeController
+- `lib/screens/home/home_screen.dart` - Lazy HomeController
+
+---
+
+## 2025-12-30 - Login Authentication Fix
+
+### Problem
+Login API was returning 400 Bad Request errors even with correct credentials. The Flutter app couldn't authenticate users.
+
+### Root Cause
+The `LoginRepository` and `SignupRepository` were calling `postApi()` without `requireAuth: false`. Since login/signup endpoints don't require authentication (they're used to GET a token), the network layer was incorrectly trying to fetch a stored token that didn't exist.
+
+### Solution
+**File**: `lib/repository/login_repository/login_repository.dart`
+- Added `requireAuth: false` to `loginApi()` call
+- Added `requireAuth: false` to `signupApi()` call
+
+```dart
+// Before (broken):
+await _apiServices.postApi(data, AppUrl.loginUrl);
+
+// After (fixed):
+await _apiServices.postApi(data, AppUrl.loginUrl, requireAuth: false);
+```
+
+### Password Reset
+- Reset user password to `Test1234` (without special characters for easier testing)
+- Verified login works via both curl and Flutter app
+
+---
+
+## 2025-12-30 - HealthKit Observer Updates for HRV & Respiratory Rate
+
+### Problem
+Initial health data (BPM, O2, HRV, br/min) was loading correctly from Apple Watch, but subsequent updates weren't being reflected in the UI.
+
+### Root Cause
+The HealthKit observers in `AppDelegate.swift` were only set up for:
+- Heart Rate ✅
+- Blood Oxygen ✅
+- Steps ✅
+- Sleep ✅
+
+Missing observers for:
+- HRV (Heart Rate Variability) ❌
+- Respiratory Rate ❌
+
+### Solution
+**File**: `ios/Runner/AppDelegate.swift`
+- Added `hrvObserver: HKObserverQuery?` and `respiratoryRateObserver: HKObserverQuery?` properties
+- Added HRV observer with `heartRateVariabilitySDNN` type
+- Added Respiratory Rate observer with `respiratoryRate` type
+- Both observers trigger `notifyFlutterHealthUpdate()` when data changes
+- Enabled background delivery for both types
+- Updated `stopHealthKitObservers()` to clean up new observers
+
+Now monitoring 6 HealthKit types:
+- Heart Rate
+- Blood Oxygen
+- HRV
+- Respiratory Rate
+- Steps
+- Sleep
 
 ---
 

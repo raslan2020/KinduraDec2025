@@ -5,6 +5,7 @@ import 'package:get/get.dart';
 import 'package:kindura_ai/data/response/status.dart';
 import 'package:kindura_ai/models/home/course_list.dart' as course_models;
 import 'package:kindura_ai/models/user_profile/user_profile_model.dart';
+import 'package:kindura_ai/models/health_snapshot.dart';
 import 'package:kindura_ai/repository/home_repository/home_repository.dart';
 import 'package:kindura_ai/res/routes/routes_name.dart';
 import 'package:kindura_ai/res/app_url/app_url.dart';
@@ -37,6 +38,9 @@ class HomeController extends GetxController {
 
   // Health data refresh timer
   Timer? _healthRefreshTimer;
+
+  // Health stream subscription for 5-second polling updates
+  StreamSubscription<HealthSnapshot>? _healthStreamSubscription;
 
   String token = "";
   DateTime? _connectionStartTime;
@@ -93,6 +97,9 @@ class HomeController extends GetxController {
   // Data source mode tracking
   final Rx<DataSourceMode> dataSourceMode = DataSourceMode.healthKitOnly.obs;
   final RxBool hasDataSourceOverride = false.obs;
+
+  /// Whether Watch workout is active for real-time HR monitoring
+  final RxBool isWatchWorkoutActive = false.obs;
 
   /// Check if current mode supports fall detection (Apple Watch only)
   bool get supportsFallDetection => dataSourceMode.value.supportsFallDetection;
@@ -369,6 +376,10 @@ class HomeController extends GetxController {
       print('[HomeController] ⌚ Apple Watch mode - enabling full Watch integration');
       await _syncWatchConfiguration();
       _setupWatchCallbacks();
+
+      // Try to start workout on Watch for real-time HR monitoring
+      // Apple Watch only streams HR continuously during active workouts
+      _tryStartWatchWorkout();
     } else if (detectedMode == DataSourceMode.healthKitOnly) {
       print('[HomeController] ❤️ HealthKit-only mode - using Oura, Whoop, Ultrahuman, etc.');
     } else {
@@ -385,6 +396,79 @@ class HomeController extends GetxController {
       await _watchVitalsService!.startHealthKitObservers();
       print('[HomeController] 🔔 HealthKit observers started');
     }
+
+    // STEP 5: Subscribe to health stream for 5-second polling updates
+    _healthStreamSubscription?.cancel();
+    _healthStreamSubscription = _watchVitalsService!.healthStream.listen(
+      _onHealthSnapshotReceived,
+      onError: (error) {
+        print('[HomeController] ❌ Health stream error: $error');
+      },
+    );
+    print('[HomeController] 📡 Subscribed to health stream');
+
+    // STEP 6: Start 5-second polling for responsive UI updates
+    if (detectedMode != DataSourceMode.manualOnly) {
+      _watchVitalsService!.startPolling();
+      print('[HomeController] ⏰ Started 5-second health data polling');
+    }
+  }
+
+  /// Handle health snapshot from 5-second polling
+  void _onHealthSnapshotReceived(HealthSnapshot snapshot) {
+    print('[HomeController] 📡 Health snapshot received: HR=${snapshot.heartRate}, O2=${snapshot.spo2}, source=${snapshot.source.name}');
+
+    // Update local state with snapshot data
+    final updatedVitals = Map<String, dynamic>.from(watchVitals.value);
+
+    // Vitals
+    if (snapshot.heartRate != null && snapshot.heartRate! > 0) {
+      updatedVitals['heart_rate'] = snapshot.heartRate;
+    }
+    if (snapshot.spo2 != null && snapshot.spo2! > 0) {
+      updatedVitals['blood_oxygen'] = snapshot.spo2;
+    }
+    if (snapshot.hrv != null && snapshot.hrv! > 0) {
+      updatedVitals['hrv'] = snapshot.hrv;
+    }
+    if (snapshot.respiratoryRate != null && snapshot.respiratoryRate! > 0) {
+      updatedVitals['respiratory_rate'] = snapshot.respiratoryRate;
+    }
+
+    // Sleep
+    if (snapshot.sleep.totalHours > 0) {
+      updatedVitals['sleep_hours'] = snapshot.sleep.totalHours;
+      updatedVitals['sleep_score'] = snapshot.sleep.sleepScore ?? 0;
+      updatedVitals['deep_sleep_hours'] = snapshot.sleep.deepSleepHours;
+      updatedVitals['rem_sleep_hours'] = snapshot.sleep.remSleepHours;
+      updatedVitals['core_sleep_hours'] = snapshot.sleep.coreSleepHours;
+      updatedVitals['awake_hours'] = snapshot.sleep.awakeHours;
+      updatedVitals['awakenings'] = snapshot.sleep.awakeningsCount;
+      updatedVitals['sleep_quality'] = snapshot.sleep.quality;
+    }
+
+    // Activity
+    if (snapshot.activity.steps > 0 || snapshot.activity.calories > 0) {
+      updatedVitals['steps'] = snapshot.activity.steps;
+      updatedVitals['calories'] = snapshot.activity.calories;
+      updatedVitals['distance_km'] = snapshot.activity.distanceKm;
+      updatedVitals['floors_climbed'] = snapshot.activity.floorsClimbed;
+      updatedVitals['exercise_minutes'] = snapshot.activity.exerciseMinutes;
+      updatedVitals['stand_minutes'] = snapshot.activity.standMinutes;
+    }
+
+    // Falls
+    updatedVitals['fall_detected'] = snapshot.fallDetected;
+    updatedVitals['falls_count'] = snapshot.fallsCount;
+
+    // Metadata
+    updatedVitals['data_available'] = snapshot.dataAvailable;
+    updatedVitals['source'] = snapshot.source.name;
+    updatedVitals['last_sync'] = snapshot.timestamp.toIso8601String();
+    updatedVitals['is_demo'] = false;
+
+    // Trigger UI update
+    watchVitals.value = updatedVitals;
   }
 
   /// Setup callbacks specific to Apple Watch mode
@@ -393,45 +477,13 @@ class HomeController extends GetxController {
     if (_watchVitalsService == null) return;
 
     // Listen for real-time Watch vitals updates via WCSession
+    // Use injectWatchConnectivityData to emit on the health stream (takes priority over polling)
     _watchVitalsService!.onVitalsReceived = (vitals) {
       print('[HomeController] ⌚️ Watch vitals received in REAL-TIME: $vitals');
 
-      // Update local state immediately for UI - include all fields
-      final updatedVitals = Map<String, dynamic>.from(watchVitals.value);
-
-      // Vitals
-      updatedVitals['heart_rate'] = (vitals['heart_rate'] ?? updatedVitals['heart_rate'] ?? 0).toDouble();
-      updatedVitals['blood_oxygen'] = (vitals['blood_oxygen'] ?? updatedVitals['blood_oxygen'] ?? 0).toDouble();
-      updatedVitals['hrv'] = (vitals['hrv'] ?? updatedVitals['hrv'] ?? 0).toDouble();
-      updatedVitals['respiratory_rate'] = (vitals['respiratory_rate'] ?? updatedVitals['respiratory_rate'] ?? 0).toDouble();
-
-      // Sleep
-      updatedVitals['sleep_hours'] = (vitals['total_sleep_hours'] ?? vitals['sleep_hours'] ?? updatedVitals['sleep_hours'] ?? 0).toDouble();
-      updatedVitals['sleep_score'] = vitals['sleep_score'] ?? updatedVitals['sleep_score'] ?? 0;
-      updatedVitals['deep_sleep_hours'] = (vitals['deep_sleep_hours'] ?? updatedVitals['deep_sleep_hours'] ?? 0).toDouble();
-      updatedVitals['rem_sleep_hours'] = (vitals['rem_sleep_hours'] ?? updatedVitals['rem_sleep_hours'] ?? 0).toDouble();
-      updatedVitals['core_sleep_hours'] = (vitals['core_sleep_hours'] ?? updatedVitals['core_sleep_hours'] ?? 0).toDouble();
-      updatedVitals['awake_hours'] = (vitals['awake_time_hours'] ?? vitals['awake_hours'] ?? updatedVitals['awake_hours'] ?? 0).toDouble();
-
-      // Activity
-      updatedVitals['steps'] = vitals['steps'] ?? updatedVitals['steps'] ?? 0;
-      updatedVitals['calories'] = vitals['calories'] ?? updatedVitals['calories'] ?? 0;
-      updatedVitals['distance_km'] = (vitals['distance_km'] ?? updatedVitals['distance_km'] ?? 0).toDouble();
-      updatedVitals['exercise_minutes'] = vitals['exercise_minutes'] ?? updatedVitals['exercise_minutes'] ?? 0;
-      updatedVitals['floors_climbed'] = vitals['floors_climbed'] ?? updatedVitals['floors_climbed'] ?? 0;
-
-      // Falls (only available with Apple Watch)
-      updatedVitals['fall_detected'] = vitals['fall_detected'] ?? false;
-      updatedVitals['falls_count'] = vitals['falls_count'] ?? updatedVitals['falls_count'] ?? 0;
-
-      // Metadata
-      updatedVitals['data_available'] = true;
-      updatedVitals['source'] = 'apple_watch';
-      updatedVitals['is_demo'] = false;
-
-      // Trigger UI update by assigning new map
-      watchVitals.value = updatedVitals;
-      print('[HomeController] ✅ UI updated with real-time Watch vitals');
+      // Inject into the health stream (this takes priority over polling)
+      // The stream listener (_onHealthSnapshotReceived) will update UI
+      _watchVitalsService!.injectWatchConnectivityData(vitals);
     };
 
     // Listen for fall detection events - handle with priority (Apple Watch only feature)
@@ -454,6 +506,60 @@ class HomeController extends GetxController {
       // Refresh health data from Apple Health when any data changes
       _refreshHealthDataFromHealthKit(type);
     };
+  }
+
+  /// Try to start workout on Watch for continuous HR monitoring
+  /// This is called automatically when Apple Watch mode is detected
+  /// Non-blocking - will silently fail if Watch app isn't running
+  Future<void> _tryStartWatchWorkout() async {
+    if (_watchVitalsService == null) return;
+
+    try {
+      print('[HomeController] 🏃 Attempting to start Watch workout for real-time HR...');
+
+      final result = await _watchVitalsService!.startWatchWorkout();
+
+      if (result != null) {
+        final status = result['status'] ?? 'unknown';
+        if (status == 'workout_started' || status == 'workout_already_active') {
+          print('[HomeController] ✅ Watch workout active - real-time HR enabled');
+          isWatchWorkoutActive.value = true;
+        } else if (result['code'] == 'NOT_REACHABLE') {
+          // Watch not reachable - the Watch app may not be running
+          // This is normal and not an error - user can start workout manually from Watch
+          print('[HomeController] ⌚ Watch not reachable - open KinduraWatch app on Watch for real-time HR');
+          isWatchWorkoutActive.value = false;
+        } else {
+          print('[HomeController] ⚠️ Watch workout response: $result');
+          isWatchWorkoutActive.value = false;
+        }
+      }
+    } catch (e) {
+      print('[HomeController] Watch workout start failed (non-critical): $e');
+      isWatchWorkoutActive.value = false;
+    }
+  }
+
+  /// Manually start Watch workout (can be called from UI)
+  Future<bool> startWatchWorkout() async {
+    if (_watchVitalsService == null) return false;
+    await _tryStartWatchWorkout();
+    return isWatchWorkoutActive.value;
+  }
+
+  /// Stop Watch workout (to save battery)
+  Future<void> stopWatchWorkout() async {
+    if (_watchVitalsService == null) return;
+
+    try {
+      final result = await _watchVitalsService!.stopWatchWorkout();
+      if (result?['status'] == 'workout_stopped') {
+        isWatchWorkoutActive.value = false;
+        print('[HomeController] ⏹️ Watch workout stopped');
+      }
+    } catch (e) {
+      print('[HomeController] Failed to stop Watch workout: $e');
+    }
   }
 
   /// Change the data source mode (for user override in Settings)
@@ -1586,6 +1692,11 @@ class HomeController extends GetxController {
     _webSocketReconnectTimer?.cancel();
     _connectionRetryTimer?.cancel();
     _watchVitalsChannel?.sink.close();
+
+    // Cancel health stream subscription
+    _healthStreamSubscription?.cancel();
+    _healthStreamSubscription = null;
+
     if (_watchVitalsService != null) {
       try {
         _watchVitalsService!.dispose();

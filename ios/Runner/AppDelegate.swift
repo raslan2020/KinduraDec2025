@@ -18,6 +18,8 @@ import HealthKit
     // HealthKit observer queries for real-time updates
     private var heartRateObserver: HKObserverQuery?
     private var bloodOxygenObserver: HKObserverQuery?
+    private var hrvObserver: HKObserverQuery?
+    private var respiratoryRateObserver: HKObserverQuery?
     private var stepsObserver: HKObserverQuery?
     private var sleepObserver: HKObserverQuery?
     private var healthKitObserversActive = false
@@ -84,7 +86,12 @@ import HealthKit
 
             case "isWatchPaired":
                 let session = WCSession.default
-                result(session.isPaired && session.isWatchAppInstalled)
+                // Return true if Watch is paired (app installation is checked separately)
+                // This allows HealthKit-based updates even if Watch app isn't installed
+                let isPaired = session.isPaired
+                let isAppInstalled = session.isWatchAppInstalled
+                print("[AppDelegate] isWatchPaired check: paired=\(isPaired), appInstalled=\(isAppInstalled)")
+                result(isPaired)  // Use isPaired only - Watch can send HealthKit data even without our app
 
             case "isWatchReachable":
                 result(WCSession.default.isReachable)
@@ -128,6 +135,15 @@ import HealthKit
             case "stopHealthKitObservers":
                 self?.stopHealthKitObservers()
                 result(true)
+
+            case "startWatchWorkout":
+                self?.sendWatchCommand(command: "start_workout", result: result)
+
+            case "stopWatchWorkout":
+                self?.sendWatchCommand(command: "stop_workout", result: result)
+
+            case "getWatchStatus":
+                self?.sendWatchCommand(command: "get_status", result: result)
 
             default:
                 result(FlutterMethodNotImplemented)
@@ -1204,6 +1220,45 @@ import HealthKit
         result(isAuthorized || storedAuth)
     }
 
+    // MARK: - Send Commands to Watch
+
+    /// Send a command to the Watch via WatchConnectivity
+    private func sendWatchCommand(command: String, result: @escaping FlutterResult) {
+        let session = WCSession.default
+
+        guard session.activationState == .activated else {
+            print("[AppDelegate] WCSession not activated")
+            result(FlutterError(code: "NOT_ACTIVATED", message: "WatchConnectivity not activated", details: nil))
+            return
+        }
+
+        guard session.isPaired else {
+            print("[AppDelegate] No Watch paired")
+            result(FlutterError(code: "NOT_PAIRED", message: "No Apple Watch paired", details: nil))
+            return
+        }
+
+        guard session.isReachable else {
+            print("[AppDelegate] Watch not reachable - make sure KinduraWatch app is running")
+            result(FlutterError(code: "NOT_REACHABLE", message: "Watch not reachable. Open the KinduraWatch app on your Watch.", details: nil))
+            return
+        }
+
+        print("[AppDelegate] 📲 Sending command to Watch: \(command)")
+
+        session.sendMessage(["command": command], replyHandler: { response in
+            print("[AppDelegate] ✅ Watch response: \(response)")
+            DispatchQueue.main.async {
+                result(response)
+            }
+        }, errorHandler: { error in
+            print("[AppDelegate] ❌ Failed to send command to Watch: \(error.localizedDescription)")
+            DispatchQueue.main.async {
+                result(FlutterError(code: "SEND_FAILED", message: error.localizedDescription, details: nil))
+            }
+        })
+    }
+
     // MARK: - Send Configuration to Watch
 
     private func sendConfigurationToWatch(baseURL: String, token: String) {
@@ -1523,6 +1578,54 @@ import HealthKit
             }
         }
 
+        // HRV Observer
+        if let hrvType = HKQuantityType.quantityType(forIdentifier: .heartRateVariabilitySDNN) {
+            hrvObserver = HKObserverQuery(sampleType: hrvType, predicate: nil) { [weak self] query, completionHandler, error in
+                if let error = error {
+                    print("[AppDelegate] ❌ HRV observer error: \(error.localizedDescription)")
+                    completionHandler()
+                    return
+                }
+
+                print("[AppDelegate] 💓 HRV changed in HealthKit")
+                self?.notifyFlutterHealthUpdate(type: "hrv")
+                completionHandler()
+            }
+
+            if let observer = hrvObserver {
+                healthStore.execute(observer)
+                healthStore.enableBackgroundDelivery(for: hrvType, frequency: .immediate) { success, error in
+                    if success {
+                        print("[AppDelegate] ✅ Background delivery enabled for HRV")
+                    }
+                }
+            }
+        }
+
+        // Respiratory Rate Observer
+        if let respiratoryType = HKQuantityType.quantityType(forIdentifier: .respiratoryRate) {
+            respiratoryRateObserver = HKObserverQuery(sampleType: respiratoryType, predicate: nil) { [weak self] query, completionHandler, error in
+                if let error = error {
+                    print("[AppDelegate] ❌ Respiratory rate observer error: \(error.localizedDescription)")
+                    completionHandler()
+                    return
+                }
+
+                print("[AppDelegate] 🌬️ Respiratory rate changed in HealthKit")
+                self?.notifyFlutterHealthUpdate(type: "respiratory_rate")
+                completionHandler()
+            }
+
+            if let observer = respiratoryRateObserver {
+                healthStore.execute(observer)
+                healthStore.enableBackgroundDelivery(for: respiratoryType, frequency: .immediate) { success, error in
+                    if success {
+                        print("[AppDelegate] ✅ Background delivery enabled for respiratory rate")
+                    }
+                }
+            }
+        }
+
         // Sleep Observer
         if let sleepType = HKCategoryType.categoryType(forIdentifier: .sleepAnalysis) {
             sleepObserver = HKObserverQuery(sampleType: sleepType, predicate: nil) { [weak self] query, completionHandler, error in
@@ -1548,7 +1651,7 @@ import HealthKit
         }
 
         healthKitObserversActive = true
-        print("[AppDelegate] 🔔 HealthKit observers started successfully")
+        print("[AppDelegate] 🔔 HealthKit observers started successfully (6 types: HR, O2, HRV, RespRate, Steps, Sleep)")
     }
 
     /// Stop all HealthKit observers
@@ -1560,6 +1663,14 @@ import HealthKit
         if let observer = bloodOxygenObserver {
             healthStore.stop(observer)
             bloodOxygenObserver = nil
+        }
+        if let observer = hrvObserver {
+            healthStore.stop(observer)
+            hrvObserver = nil
+        }
+        if let observer = respiratoryRateObserver {
+            healthStore.stop(observer)
+            respiratoryRateObserver = nil
         }
         if let observer = stepsObserver {
             healthStore.stop(observer)

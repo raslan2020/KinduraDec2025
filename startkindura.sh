@@ -58,6 +58,55 @@ case $DEVICE_CHOICE in
 esac
 echo ""
 
+# =========================================================================
+# NETWORK CONFIGURATION - Check WiFi and configure IP addresses
+# =========================================================================
+echo "🌐 Checking network configuration..."
+
+# Get current WiFi IP address
+CURRENT_IP=$(ipconfig getifaddr en0 2>/dev/null)
+if [ -z "$CURRENT_IP" ]; then
+    # Try alternative interface
+    CURRENT_IP=$(ipconfig getifaddr en1 2>/dev/null)
+fi
+
+if [ -z "$CURRENT_IP" ]; then
+    echo "⚠️  Warning: Could not detect WiFi IP address"
+    echo "   Make sure you're connected to WiFi"
+    CURRENT_IP="127.0.0.1"
+else
+    echo "✅ WiFi IP detected: $CURRENT_IP"
+fi
+
+# Update app_url.dart with current IP (for real device mode)
+if [ "$USE_SIMULATOR" = false ]; then
+    echo "🔧 Updating Flutter app_url.dart with IP: $CURRENT_IP"
+    APP_URL_FILE="$SCRIPT_DIR/lib/res/app_url/app_url.dart"
+    if [ -f "$APP_URL_FILE" ]; then
+        # Replace the localBaseUrl line with current IP
+        sed -i '' "s|static const String localBaseUrl = \"http://[^\"]*\"|static const String localBaseUrl = \"http://$CURRENT_IP:8000/api\"|" "$APP_URL_FILE"
+        echo "✅ app_url.dart updated"
+    else
+        echo "⚠️  app_url.dart not found at expected location"
+    fi
+
+    # Update Django ALLOWED_HOSTS if IP not already present
+    echo "🔧 Checking Django ALLOWED_HOSTS..."
+    DJANGO_SETTINGS="$SCRIPT_DIR/KinduraAPIs-0.0.1/medical_app/settings.py"
+    if [ -f "$DJANGO_SETTINGS" ]; then
+        if grep -q "$CURRENT_IP" "$DJANGO_SETTINGS"; then
+            echo "✅ IP already in ALLOWED_HOSTS"
+        else
+            echo "🔧 Adding $CURRENT_IP to Django ALLOWED_HOSTS..."
+            # Add IP to the ALLOWED_HOSTS list
+            sed -i '' "s|\(ALLOWED_HOSTS = _env_hosts + \[.*\)\]|\1, '$CURRENT_IP'\]|" "$DJANGO_SETTINGS"
+            echo "✅ Django settings updated"
+        fi
+    fi
+fi
+
+echo ""
+
 # Kill any existing processes
 echo "🔄 Stopping existing services..."
 pkill -f "flutter run" 2>/dev/null || true
@@ -392,15 +441,49 @@ if [ "$USE_SIMULATOR" = true ]; then
 else
     # Run on real device
     echo "📱 Looking for connected iPhone..."
+    echo ""
 
-    # Find connected physical iPhone
-    IPHONE_NAME=$(flutter devices | grep -i "mobile" | grep -v "simulator" | head -1 | sed 's/ (mobile).*//' | xargs)
+    # Show all available devices
+    echo "Available devices:"
+    flutter devices
+    echo ""
 
-    if [ -n "$IPHONE_NAME" ]; then
-        echo "✅ Found: $IPHONE_NAME"
-        echo "📱 Starting Flutter App on Real iPhone ($IPHONE_NAME)..."
-        flutter run -d "$IPHONE_NAME" &
-        FLUTTER_PID=$!
+    # Find connected physical iPhone - use device ID for reliability
+    IPHONE_LINE=$(flutter devices | grep -i "mobile" | grep -v "simulator" | grep -i "ios" | head -1)
+
+    if [ -n "$IPHONE_LINE" ]; then
+        # Extract device name (everything before "(mobile)")
+        IPHONE_NAME=$(echo "$IPHONE_LINE" | sed 's/ (mobile).*//' | xargs)
+        # Extract device ID (the UUID/serial between the bullet points)
+        IPHONE_ID=$(echo "$IPHONE_LINE" | grep -oE '[0-9A-Fa-f]{8}-[0-9A-Fa-f]{16}' | head -1)
+
+        echo "✅ Found iPhone: $IPHONE_NAME"
+        echo "   Device ID: $IPHONE_ID"
+        echo "   API URL: http://$CURRENT_IP:8000/api"
+        echo ""
+        echo "📱 Building and installing Flutter App..."
+        echo "   (This may take 30-60 seconds for first build)"
+        echo ""
+
+        # Use device ID instead of name (more reliable, especially with spaces)
+        if [ -n "$IPHONE_ID" ]; then
+            # First attempt - normal debug mode
+            echo "🔄 Attempting Flutter run (debug mode)..."
+            flutter run -d "$IPHONE_ID" &
+            FLUTTER_PID=$!
+
+            # Wait and check if it started successfully
+            sleep 30
+            if ! ps -p $FLUTTER_PID > /dev/null 2>&1; then
+                echo "⚠️  Debug mode failed. Trying release mode..."
+                # Try release mode - often works when debug times out
+                flutter run --release -d "$IPHONE_ID" &
+                FLUTTER_PID=$!
+            fi
+        else
+            flutter run -d "$IPHONE_NAME" &
+            FLUTTER_PID=$!
+        fi
         echo "✅ Flutter App started on Real Device (PID: $FLUTTER_PID)"
     else
         echo "⚠️  No physical iPhone found. Available devices:"
@@ -411,7 +494,7 @@ else
         echo "   - Unlocked with Developer Mode enabled"
         echo "   - Trusted on this Mac"
         echo ""
-        read -p "Enter device name manually (or press Enter to cancel): " MANUAL_DEVICE
+        read -p "Enter device ID or name manually (or press Enter to cancel): " MANUAL_DEVICE
         if [ -n "$MANUAL_DEVICE" ]; then
             echo "📱 Starting Flutter App on $MANUAL_DEVICE..."
             flutter run -d "$MANUAL_DEVICE" &
@@ -429,14 +512,14 @@ echo "🎉 All Kindura AI services started successfully!"
 echo ""
 echo "📊 Services Running:"
 echo "  PostgreSQL DB:  localhost:5432/kindura_db (kindura_user)"
-echo "  Django API:     New Terminal Tab (http://127.0.0.1:8000)"
-echo "  LiveKit Agent:  New Terminal Tab (wss://kindura-u99yilqz.livekit.cloud)"
-echo "  Flutter App:    PID $FLUTTER_PID (Running on iOS Simulator)"
-echo ""
-echo "🌐 Services:"
-echo "  Django API:     http://127.0.0.1:8000 (Local Development)"
+echo "  Django API:     http://$CURRENT_IP:8000 (0.0.0.0:8000)"
 echo "  LiveKit Agent:  wss://kindura-u99yilqz.livekit.cloud"
-echo "  Flutter App:    Running on iOS Simulator"
+echo "  Flutter App:    PID $FLUTTER_PID"
+echo ""
+echo "🌐 Network Configuration:"
+echo "  WiFi IP:        $CURRENT_IP"
+echo "  Django API:     http://$CURRENT_IP:8000/api"
+echo "  LiveKit Agent:  wss://kindura-u99yilqz.livekit.cloud"
 echo ""
 echo "🛑 To stop all services:"
 echo "  • Close the Django and LiveKit Terminal tabs manually"

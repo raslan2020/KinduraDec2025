@@ -59,7 +59,10 @@
 	<key>WKApplication</key>
 	<true/>
 	<key>WKBackgroundModes</key>
-	<array/>
+	<array>
+		<string>workout-processing</string>
+		<string>self-care</string>
+	</array>
 	<key>WKCompanionAppBundleIdentifier</key>
 	<string>com.kindura.ai</string>
 	<key>WKRunsIndependentlyOfCompanionApp</key>

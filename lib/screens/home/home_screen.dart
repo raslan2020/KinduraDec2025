@@ -22,7 +22,14 @@ class Home extends StatefulWidget {
 }
 
 class _HomeState extends State<Home> with SingleTickerProviderStateMixin {
-  final homeController = Get.find<HomeController>();
+  // Lazily get or create HomeController
+  HomeController get homeController {
+    if (!Get.isRegistered<HomeController>()) {
+      Get.put(HomeController(), permanent: true);
+    }
+    return Get.find<HomeController>();
+  }
+
   final medicationController = Get.put(MedicationController());
   final labsController = Get.put(LabsController());
 

@@ -1,16 +1,25 @@
+import 'dart:async';
 import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:kindura_ai/repository/home_repository/home_repository.dart';
 import 'package:kindura_ai/user_preference/user_preferences_view_model.dart';
 import 'package:kindura_ai/res/app_url/app_url.dart';
 import 'package:kindura_ai/models/health/data_source_mode.dart';
+import 'package:kindura_ai/models/health_snapshot.dart';
 
 /// Service to handle Watch vitals data from iOS native layer
 /// Supports multiple data sources:
 /// - Apple Watch via WCSession (real-time vitals, fall detection)
 /// - HealthKit only (for Oura, Whoop, Ultrahuman, etc.)
 /// - Manual entry
-class WatchVitalsService {
+///
+/// Enhanced with:
+/// - 5-second foreground polling for responsive UI
+/// - StreamController for reactive health data updates
+/// - 30-second API throttle to avoid excessive API calls
+/// - App lifecycle awareness (pause polling in background)
+class WatchVitalsService with WidgetsBindingObserver {
   static const MethodChannel _channel = MethodChannel('com.kindura.ai/watch_vitals');
   final HomeRepository _homeRepository = HomeRepository();
   final UserPreferences _userPreferences = UserPreferences();
@@ -21,6 +30,27 @@ class WatchVitalsService {
 
   // User override preference (null = auto-detect)
   DataSourceMode? _userOverrideMode;
+
+  // Polling configuration
+  static const Duration _pollingInterval = Duration(seconds: 5);
+  static const Duration _apiThrottleInterval = Duration(seconds: 30);
+  Timer? _pollingTimer;
+  DateTime? _lastApiCallTime;
+  bool _isPolling = false;
+
+  // Stream for reactive health data updates
+  final StreamController<HealthSnapshot> _healthStreamController =
+      StreamController<HealthSnapshot>.broadcast();
+
+  /// Stream of health snapshots for reactive UI updates
+  Stream<HealthSnapshot> get healthStream => _healthStreamController.stream;
+
+  /// Latest cached snapshot
+  HealthSnapshot? _latestSnapshot;
+  HealthSnapshot? get latestSnapshot => _latestSnapshot;
+
+  /// Check if polling is active
+  bool get isPolling => _isPolling;
 
   Function(Map<String, dynamic>)? onVitalsReceived;
   Function(Map<String, dynamic>)? onFallDetected;
@@ -37,6 +67,27 @@ class WatchVitalsService {
 
   WatchVitalsService() {
     _setupMethodCallHandler();
+    // Register for app lifecycle events to pause/resume polling
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  /// Handle app lifecycle state changes
+  /// Stop polling when app goes to background, resume when foreground
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    switch (state) {
+      case AppLifecycleState.resumed:
+        print('[WatchVitalsService] 📱 App resumed - starting polling');
+        startPolling();
+        break;
+      case AppLifecycleState.paused:
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.detached:
+      case AppLifecycleState.hidden:
+        print('[WatchVitalsService] 📱 App backgrounded - stopping polling');
+        stopPolling();
+        break;
+    }
   }
 
   void _setupMethodCallHandler() {
@@ -117,6 +168,13 @@ class WatchVitalsService {
   /// Send vitals to Django API for storage
   Future<void> _sendVitalsToAPI(Map<String, dynamic> vitals) async {
     try {
+      // Valid sleep_quality values: excellent, good, fair, poor (not 'unknown')
+      String? sleepQuality;
+      final rawQuality = (vitals['sleep_quality'] ?? '').toString().toLowerCase();
+      if (['excellent', 'good', 'fair', 'poor'].contains(rawQuality)) {
+        sleepQuality = rawQuality;
+      }
+
       // Convert Watch data format to API format
       final apiData = {
         'heart_rate': vitals['heart_rate'] ?? 0,
@@ -129,7 +187,7 @@ class WatchVitalsService {
         'core_sleep_hours': vitals['core_sleep_hours'],
         'awake_time_hours': vitals['awake_time_hours'],
         'awakenings_count': vitals['awakenings_count'] ?? 0,
-        'sleep_quality': vitals['sleep_quality'],
+        'sleep_quality': sleepQuality,
         'fall_detected': vitals['fall_detected'] ?? false,
         'recorded_at': vitals['timestamp'] ?? DateTime.now().toIso8601String(),
       };
@@ -137,12 +195,12 @@ class WatchVitalsService {
       final response = await _homeRepository.saveWatchVitals(apiData);
 
       if (response['status'] == true) {
-        print('Watch vitals saved to database successfully');
+        print('[WatchVitalsService] ✅ Watch vitals saved to database');
       } else {
-        print('Failed to save Watch vitals: ${response['message']}');
+        print('[WatchVitalsService] ⚠️ Failed to save Watch vitals: ${response['message']}');
       }
     } catch (e) {
-      print('Error sending vitals to API: $e');
+      print('[WatchVitalsService] ❌ Error sending vitals to API: $e');
     }
   }
 
@@ -566,8 +624,202 @@ class WatchVitalsService {
     ];
   }
 
+  // MARK: - Foreground Polling (5-second interval)
+
+  /// Start 5-second polling for responsive health data updates
+  /// Only polls when app is in foreground
+  void startPolling() {
+    if (_isPolling) {
+      print('[WatchVitalsService] ⏰ Polling already active');
+      return;
+    }
+
+    if (_currentMode == DataSourceMode.manualOnly) {
+      print('[WatchVitalsService] 📝 Manual mode - skipping polling');
+      return;
+    }
+
+    _isPolling = true;
+    print('[WatchVitalsService] ⏰ Starting 5-second health data polling');
+
+    // Poll immediately on start
+    _poll();
+
+    // Then poll every 5 seconds
+    _pollingTimer = Timer.periodic(_pollingInterval, (_) => _poll());
+  }
+
+  /// Stop polling (called when app goes to background)
+  void stopPolling() {
+    if (!_isPolling) return;
+
+    _isPolling = false;
+    _pollingTimer?.cancel();
+    _pollingTimer = null;
+    print('[WatchVitalsService] ⏰ Stopped health data polling');
+  }
+
+  /// Poll HealthKit for latest health data
+  Future<void> _poll() async {
+    try {
+      // Get comprehensive health data from native iOS
+      final healthData = await getHealthSummary();
+
+      if (healthData != null && healthData.isNotEmpty) {
+        // Create snapshot from health data
+        final snapshot = HealthSnapshot.fromMap({
+          ...healthData,
+          'timestamp': DateTime.now().toIso8601String(),
+          'source': _currentMode == DataSourceMode.appleWatch
+              ? 'apple_watch'
+              : 'healthkit',
+          'data_available': true,
+        });
+
+        // Only emit if we have meaningful data or it's different from last
+        if (snapshot.hasVitals || snapshot.hasActivity) {
+          _latestSnapshot = snapshot;
+          _healthStreamController.add(snapshot);
+          print('[WatchVitalsService] ⏰ Poll: HR=${snapshot.heartRate}, O2=${snapshot.spo2}');
+
+          // Throttled API save (every 30 seconds)
+          await _throttledApiSave(snapshot);
+        }
+      }
+    } catch (e) {
+      print('[WatchVitalsService] ⏰ Poll error: $e');
+    }
+  }
+
+  /// Save snapshot to API with 30-second throttle
+  /// Avoids excessive API calls while ensuring data is persisted
+  Future<void> _throttledApiSave(HealthSnapshot snapshot) async {
+    final now = DateTime.now();
+
+    // Check if enough time has passed since last API call
+    if (_lastApiCallTime != null) {
+      final elapsed = now.difference(_lastApiCallTime!);
+      if (elapsed < _apiThrottleInterval) {
+        print('[WatchVitalsService] 🚫 API throttled (${elapsed.inSeconds}s < 30s)');
+        return;
+      }
+    }
+
+    // Save to API
+    try {
+      print('[WatchVitalsService] 💾 Saving to API (throttled)');
+      _lastApiCallTime = now;
+
+      final response = await _homeRepository.saveWatchVitals(snapshot.toApiJson());
+
+      if (response['status'] == true) {
+        print('[WatchVitalsService] ✅ API save successful');
+      } else {
+        print('[WatchVitalsService] ⚠️ API save failed: ${response['message']}');
+      }
+    } catch (e) {
+      print('[WatchVitalsService] ❌ API save error: $e');
+    }
+  }
+
+  /// Inject health data from WatchConnectivity (takes priority over polling)
+  /// Call this when receiving real-time data from Apple Watch via WCSession
+  void injectWatchConnectivityData(Map<String, dynamic> vitals) {
+    final snapshot = HealthSnapshot.fromMap({
+      ...vitals,
+      'timestamp': DateTime.now().toIso8601String(),
+      'source': 'apple_watch',
+      'data_available': true,
+    });
+
+    _latestSnapshot = snapshot;
+    _healthStreamController.add(snapshot);
+    print('[WatchVitalsService] ⌚ Injected WatchConnectivity data: HR=${snapshot.heartRate}');
+
+    // Always save WatchConnectivity data immediately (bypass throttle for real-time data)
+    _sendVitalsToAPI(vitals);
+  }
+
+  // MARK: - Watch Workout Control (for Real-Time HR Sync)
+
+  /// Start workout session on Watch for real-time heart rate monitoring
+  /// Apple Watch only streams HR continuously during active workouts
+  /// Returns true if workout started successfully
+  Future<Map<String, dynamic>?> startWatchWorkout() async {
+    try {
+      print('[WatchVitalsService] 🏃 Starting Watch workout for real-time HR...');
+      final result = await _channel.invokeMethod<Map>('startWatchWorkout');
+      if (result != null) {
+        final response = Map<String, dynamic>.from(result);
+        print('[WatchVitalsService] ✅ Watch workout response: $response');
+        return response;
+      }
+      return null;
+    } on PlatformException catch (e) {
+      print('[WatchVitalsService] ❌ Start Watch workout error: ${e.code} - ${e.message}');
+      return {'status': 'error', 'error': e.message, 'code': e.code};
+    } catch (e) {
+      print('[WatchVitalsService] ❌ Start Watch workout error: $e');
+      return {'status': 'error', 'error': e.toString()};
+    }
+  }
+
+  /// Stop workout session on Watch
+  /// Stops real-time HR streaming to save battery
+  Future<Map<String, dynamic>?> stopWatchWorkout() async {
+    try {
+      print('[WatchVitalsService] ⏹️ Stopping Watch workout...');
+      final result = await _channel.invokeMethod<Map>('stopWatchWorkout');
+      if (result != null) {
+        final response = Map<String, dynamic>.from(result);
+        print('[WatchVitalsService] ✅ Watch workout stopped: $response');
+        return response;
+      }
+      return null;
+    } on PlatformException catch (e) {
+      print('[WatchVitalsService] ❌ Stop Watch workout error: ${e.code} - ${e.message}');
+      return {'status': 'error', 'error': e.message, 'code': e.code};
+    } catch (e) {
+      print('[WatchVitalsService] ❌ Stop Watch workout error: $e');
+      return {'status': 'error', 'error': e.toString()};
+    }
+  }
+
+  /// Get detailed Watch monitoring status (workout active, real-time HR, current vitals)
+  /// Sends command to Watch via WatchConnectivity to get live status
+  Future<Map<String, dynamic>?> getWatchMonitoringStatus() async {
+    try {
+      print('[WatchVitalsService] 📊 Getting Watch monitoring status...');
+      final result = await _channel.invokeMethod<Map>('getWatchStatus');
+      if (result != null) {
+        final response = Map<String, dynamic>.from(result);
+        print('[WatchVitalsService] ✅ Watch monitoring status: $response');
+        return response;
+      }
+      return null;
+    } on PlatformException catch (e) {
+      print('[WatchVitalsService] ❌ Get Watch monitoring status error: ${e.code} - ${e.message}');
+      return {'status': 'error', 'error': e.message, 'code': e.code};
+    } catch (e) {
+      print('[WatchVitalsService] ❌ Get Watch monitoring status error: $e');
+      return {'status': 'error', 'error': e.toString()};
+    }
+  }
+
   void dispose() {
+    // Stop polling
+    stopPolling();
+
+    // Remove lifecycle observer
+    WidgetsBinding.instance.removeObserver(this);
+
+    // Close stream
+    _healthStreamController.close();
+
+    // Clear method channel handler
     _channel.setMethodCallHandler(null);
+
+    print('[WatchVitalsService] 🗑️ Disposed');
   }
 }
 
