@@ -128,9 +128,19 @@ Watch User Action (Take/Skip/Snooze)
 - `watchos/KinduraWatch/ContentView.swift` - Sheet presentation
 - `lib/services/watch_vitals_service.dart` - Flutter bridge method
 - `lib/services/notification_service.dart` - Watch integration
+- `watchos/watchapp.md` - Documentation updated with full medication reminder flow
 
 ### Files Created
 - `watchos/KinduraWatch/MedicationReminderView.swift` - Watch UI
+
+### Documentation Updates
+- Updated `watchos/watchapp.md` with:
+  - Added MedicationReminderView.swift to file structure
+  - Added "Medication Reminders" feature (section 6)
+  - Added detailed medication reminder data flow diagram
+  - Added MedicationReminder struct documentation to API Reference
+  - Added medication reminder methods to HealthManager API table
+  - Updated iPhone App Requirements with medication reminder handling
 
 ---
 

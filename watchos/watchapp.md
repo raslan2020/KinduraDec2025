@@ -1,6 +1,6 @@
 # KinduraWatch - Apple Watch App Documentation
 
-**Last Updated**: 2026-01-08 (Updated with iPhone sync requirements)
+**Last Updated**: 2026-01-09 (Added Medication Reminders Push)
 **App Version**: 1.0
 **Platform**: watchOS (Native Swift/SwiftUI) - **NOT Flutter**
 
@@ -115,6 +115,13 @@ KinduraWatch is a **100% native Apple Watch app** built with Swift and SwiftUI. 
 │   │   - SleepView: Sleep duration and stages
 │   │   - FallDetectionView: G-force, fall history, SOS
 │   │   - VitalCard: Reusable vital display component
+│   │   - Sheet presentation for MedicationReminderView
+│   │
+│   ├── MedicationReminderView.swift      # Medication reminder UI (NEW)
+│   │   - Displays pushed medication reminders from iPhone
+│   │   - Take Now / Snooze 15m / Skip buttons
+│   │   - Haptic feedback on actions
+│   │   - Form-specific icons for medications
 │   │
 │   ├── SettingsView.swift                # Settings screen
 │   │   - Backend connection status
@@ -212,6 +219,18 @@ import CoreMotion
 - Offline buffering with UserDefaults
 - Application context for latest state
 
+### 6. Medication Reminders (NEW - 2026-01-09)
+- **Push from iPhone**: Receive medication reminders via WatchConnectivity
+- **Display on Watch**: SwiftUI sheet with medication details
+- **Haptic Notification**: Vibration alert when reminder arrives
+- **Quick Actions**:
+  - Take Now (green) - Records dose as taken
+  - Snooze 15m (orange) - Reschedules reminder
+  - Skip (gray) - Marks dose as skipped
+- **Bidirectional Response**: User actions sent back to iPhone app
+- **Form Icons**: Visual icons based on medication form (tablet, capsule, liquid, etc.)
+- **Offline Support**: Response buffered if iPhone not reachable
+
 ---
 
 ## Data Flow
@@ -275,6 +294,156 @@ import CoreMotion
 | `transferUserInfo()` | Guaranteed delivery | Queued |
 | `updateApplicationContext()` | Latest state sync | Replaced |
 | `UserDefaults` buffering | Offline storage | Persisted |
+
+### Medication Reminder Flow (iPhone → Watch → iPhone)
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                  Flutter App (iPhone)                            │
+│                                                                  │
+│  NotificationService._showMedicationReminder()                   │
+│         │                                                        │
+│         ├─→ Show AlertDialog in app                              │
+│         │                                                        │
+│         └─→ _sendReminderToWatch()                               │
+│               │                                                  │
+│               └─→ WatchVitalsService.sendMedicationReminder()    │
+│                     │                                            │
+│                     └─→ MethodChannel("sendMedicationReminder")  │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+                             │
+                             ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                  AppDelegate.swift (iOS Native)                  │
+│                                                                  │
+│  sendMedicationReminderToWatch(medicationData:result:)           │
+│         │                                                        │
+│         ├─→ WCSession.isReachable?                               │
+│         │     ├─→ YES: sendMessage() (real-time)                 │
+│         │     └─→ NO:  transferUserInfo() (guaranteed)           │
+│         │                                                        │
+│         └─→ Payload: { type: "medication_reminder", ... }        │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+                             │
+                    WatchConnectivity
+                             │
+                             ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                  HealthManager.swift (watchOS)                   │
+│                                                                  │
+│  didReceiveMessage / didReceiveUserInfo                          │
+│         │                                                        │
+│         └─→ type == "medication_reminder"                        │
+│               │                                                  │
+│               └─→ handleMedicationReminder()                     │
+│                     │                                            │
+│                     ├─→ Parse into MedicationReminder struct     │
+│                     ├─→ Set currentMedicationReminder            │
+│                     ├─→ Set showMedicationReminderAlert = true   │
+│                     └─→ WKInterfaceDevice.current().play(.notification)
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+                             │
+                             ▼
+┌─────────────────────────────────────────────────────────────────┐
+│             MedicationReminderView.swift (watchOS UI)            │
+│                                                                  │
+│  ┌─────────────────────────────────────────┐                     │
+│  │ 💊 Medication Time                      │                     │
+│  │                                         │                     │
+│  │ Metformin                               │                     │
+│  │ 500 mg tablet                           │                     │
+│  │ 8:00 AM                                 │                     │
+│  │ "Take with food"                        │                     │
+│  │                                         │                     │
+│  │ [Take Now] [Snooze] [Skip]              │                     │
+│  └─────────────────────────────────────────┘                     │
+│                                                                  │
+│  User taps button → haptic feedback                              │
+│         │                                                        │
+│         └─→ healthManager.sendMedicationReminderResponse()       │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+                             │
+                             ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                  HealthManager.swift (Watch → iPhone)            │
+│                                                                  │
+│  sendMedicationReminderResponse()                                │
+│         │                                                        │
+│         └─→ WCSession.sendMessage()                              │
+│               │                                                  │
+│               └─→ Payload: { type: "medication_reminder_response",
+│                              action: "taken"/"skipped"/"snoozed",
+│                              medication_id: "...",
+│                              scheduled_time: "...",
+│                              taken_at: "..." }                   │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+                             │
+                    WatchConnectivity
+                             │
+                             ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                  AppDelegate.swift (iOS)                         │
+│                                                                  │
+│  didReceiveMessage (type == "medication_reminder_response")      │
+│         │                                                        │
+│         └─→ watchVitalsChannel.invokeMethod(                     │
+│               "onMedicationReminderResponse", arguments)         │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+                             │
+                             ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                  Flutter App (iPhone)                            │
+│                                                                  │
+│  WatchVitalsService._setupMethodCallHandler()                    │
+│         │                                                        │
+│         └─→ onMedicationReminderResponse callback                │
+│               │                                                  │
+│               └─→ NotificationService._handleWatchResponse()     │
+│                     │                                            │
+│                     ├─→ "taken"   → MedicationController.recordDoseTaken()
+│                     ├─→ "skipped" → MedicationController.recordDoseSkipped()
+│                     └─→ "snoozed" → Schedule new reminder +15min │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Medication Reminder Payload Structures
+
+**iPhone → Watch (medication_reminder)**:
+```json
+{
+  "type": "medication_reminder",
+  "reminder_id": "uuid-string",
+  "medication_id": "med-123",
+  "medication_name": "Metformin",
+  "dosage": "500 mg",
+  "form": "tablet",
+  "scheduled_time": "2026-01-09T08:00:00Z",
+  "instructions": "Take with food",
+  "is_follow_up": false,
+  "follow_up_number": 0,
+  "requires_escalation": false,
+  "timestamp": "2026-01-09T07:59:55Z"
+}
+```
+
+**Watch → iPhone (medication_reminder_response)**:
+```json
+{
+  "type": "medication_reminder_response",
+  "medication_id": "med-123",
+  "action": "taken",
+  "scheduled_time": "2026-01-09T08:00:00Z",
+  "taken_at": "2026-01-09T08:05:23Z",
+  "source": "apple_watch"
+}
+```
 
 ---
 
@@ -640,6 +809,25 @@ View logs:
 | `fetchActivityData()` | Query activity data |
 | `createVitalsPayload()` | Build vitals dictionary for sync |
 | `checkReachabilityAndSync()` | Periodic check for iPhone and sync |
+| `handleMedicationReminder()` | Process medication reminder from iPhone |
+| `sendMedicationReminderResponse()` | Send user action back to iPhone |
+| `bufferMedicationResponse()` | Store response when iPhone unreachable |
+| `dismissCurrentReminder()` | Clear current reminder and reset alert flag |
+
+### MedicationReminder Struct (Watch Side)
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `id` | String | Unique reminder ID |
+| `medicationId` | String | ID of the medication |
+| `medicationName` | String | Display name of medication |
+| `dosage` | String | Dosage amount (e.g., "500 mg") |
+| `form` | String | Medication form (tablet, capsule, liquid) |
+| `scheduledTime` | Date | When the dose is scheduled |
+| `instructions` | String | Special instructions |
+| `isFollowUp` | Bool | Whether this is a follow-up reminder |
+| `followUpNumber` | Int | Follow-up sequence number (0, 1, 2) |
+| `requiresEscalation` | Bool | Whether to escalate to caregiver |
 
 ### ConfigurationManager Key Methods (Watch Side)
 
@@ -695,6 +883,8 @@ func sessionDidDeactivate(_ session: WCSession)
 | `forwardVitalsToDjango()` | ~1860 | Send received vitals to backend API |
 | `forwardFallAlertToDjango()` | ~1900 | Send fall alerts to backend API (high priority) |
 | `cleanupOldTransferKeys()` | ~2125 | Cleanup processed transfer/fall dedup keys |
+| `sendMedicationReminderToWatch()` | ~NEW | Push medication reminder to Watch |
+| `queueMedicationReminderForDelivery()` | ~NEW | Queue reminder via transferUserInfo |
 
 ### Message Handling Flow
 
@@ -707,6 +897,7 @@ func sessionDidDeactivate(_ session: WCSession)
 │  ├── type == "watch_vitals" → store + forward to Django + Flutter   │
 │  ├── type == "fall_alert"   → DEDUP by timestamp → forward + alert  │
 │  ├── type == "request_config" → send API URL + token to Watch       │
+│  ├── type == "medication_reminder_response" → forward to Flutter    │
 │  └── command == "start_workout" / "stop_workout" / "get_status"     │
 │                                                                      │
 │  didReceiveUserInfo (guaranteed delivery)                            │
@@ -776,15 +967,17 @@ private let watchVitalsChannel: FlutterMethodChannel?
 // Channel ID: "com.kindura.ai/watch_vitals"
 
 // Methods exposed to Flutter:
-// - "sendConfigToWatch" : Send API config to Watch
-// - "getLatestVitals"   : Get last received vitals
-// - "startWatchWorkout" : Remote start workout on Watch
-// - "stopWatchWorkout"  : Remote stop workout on Watch
-// - "getWatchStatus"    : Get Watch connection status
+// - "sendConfigToWatch"         : Send API config to Watch
+// - "getLatestVitals"           : Get last received vitals
+// - "startWatchWorkout"         : Remote start workout on Watch
+// - "stopWatchWorkout"          : Remote stop workout on Watch
+// - "getWatchStatus"            : Get Watch connection status
+// - "sendMedicationReminder"    : Push medication reminder to Watch (NEW)
 
 // Events sent to Flutter:
-// - "onWatchVitalsReceived" : New vitals from Watch
-// - "onFallDetected"        : Fall alert from Watch
+// - "onWatchVitalsReceived"         : New vitals from Watch
+// - "onFallDetected"                : Fall alert from Watch
+// - "onMedicationReminderResponse"  : User action from Watch (NEW)
 ```
 
 ### Data Storage
