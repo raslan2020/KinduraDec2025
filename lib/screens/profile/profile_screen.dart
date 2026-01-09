@@ -902,6 +902,126 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               SizedBox(height: 24.h),
 
+              // Fall Detection Section
+              Text(
+                'Fall Detection',
+                style: TextStyle(
+                  fontSize: 16.sp,
+                  fontWeight: FontWeight.w600,
+                  color: Theme.of(context).textTheme.bodyLarge?.color,
+                ),
+              ),
+              SizedBox(height: 8.h),
+              Text(
+                'Apple Watch has built-in fall detection. When enabled, falls are automatically recorded to HealthKit and synced to Kindura.',
+                style: TextStyle(
+                  fontSize: 12.sp,
+                  color: Theme.of(context).textTheme.bodySmall?.color,
+                ),
+              ),
+              SizedBox(height: 12.h),
+              Container(
+                padding: EdgeInsets.all(12.w),
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.orange.withOpacity(0.5)),
+                  borderRadius: BorderRadius.circular(8.w),
+                  color: Colors.orange.withOpacity(0.05),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Header
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.health_and_safety,
+                          color: Colors.orange,
+                          size: 24.sp,
+                        ),
+                        SizedBox(width: 12.w),
+                        Text(
+                          'How to Enable Apple Fall Detection',
+                          style: TextStyle(
+                            color: Theme.of(context).textTheme.bodyLarge?.color,
+                            fontSize: 14.sp,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: 16.h),
+                    // Step-by-step instructions
+                    _buildInlineStep(context, '1', 'Open the Watch app on your iPhone'),
+                    _buildInlineStep(context, '2', 'Tap "My Watch" tab at the bottom'),
+                    _buildInlineStep(context, '3', 'Scroll down and tap "Emergency SOS"'),
+                    _buildInlineStep(context, '4', 'Tap "Fall Detection"'),
+                    _buildInlineStep(context, '5', 'Toggle Fall Detection ON'),
+                    _buildInlineStep(context, '6', 'Select "Always On" for best coverage'),
+                    SizedBox(height: 12.h),
+                    // Success indicator
+                    Container(
+                      padding: EdgeInsets.all(10.w),
+                      decoration: BoxDecoration(
+                        color: Colors.green.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(6.w),
+                        border: Border.all(color: Colors.green.withOpacity(0.3)),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.check_circle, color: Colors.green, size: 18.sp),
+                          SizedBox(width: 8.w),
+                          Expanded(
+                            child: Text(
+                              'Once enabled, Apple-detected falls will automatically sync to Kindura via HealthKit.',
+                              style: TextStyle(
+                                fontSize: 11.sp,
+                                color: Colors.green.shade700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    SizedBox(height: 10.h),
+                    // Info about dual detection
+                    Container(
+                      padding: EdgeInsets.all(10.w),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(6.w),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(Icons.info_outline, size: 16.sp, color: Colors.blue),
+                          SizedBox(width: 8.w),
+                          Expanded(
+                            child: Text(
+                              'Kindura also detects falls using its own accelerometer analysis. Both sources sync to HealthKit for comprehensive coverage.',
+                              style: TextStyle(
+                                fontSize: 11.sp,
+                                color: Colors.blue.shade700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    SizedBox(height: 10.h),
+                    // Note about fall detection sensitivity
+                    Text(
+                      'Note: Apple\'s fall detection is designed for hard falls with free-fall + impact + post-fall immobility. It won\'t trigger from minor bumps.',
+                      style: TextStyle(
+                        fontSize: 10.sp,
+                        color: Theme.of(context).textTheme.bodySmall?.color,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(height: 24.h),
+
               // Health Data Source Section
               Text(
                 'Health Data Source',
@@ -1278,6 +1398,189 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ],
       ),
       barrierDismissible: true,
+    );
+  }
+
+  void _showFallDetectionGuide(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    Get.dialog(
+      AlertDialog(
+        backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Icon(
+              Icons.health_and_safety,
+              color: Colors.orange,
+              size: 28,
+            ),
+            SizedBox(width: 8.w),
+            Text(
+              'Enable Fall Detection',
+              style: TextStyle(
+                color: Theme.of(context).textTheme.bodyLarge?.color,
+                fontWeight: FontWeight.bold,
+                fontSize: 18.sp,
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Apple Watch has built-in fall detection that works even when Kindura isn\'t running.\n',
+                style: TextStyle(
+                  color: isDark ? Colors.white70 : Colors.black87,
+                  fontSize: 14.sp,
+                ),
+              ),
+              Text(
+                'To enable Apple Fall Detection:',
+                style: TextStyle(
+                  color: Theme.of(context).textTheme.bodyLarge?.color,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14.sp,
+                ),
+              ),
+              SizedBox(height: 12.h),
+              _buildStepItem('1', 'Open the Watch app on your iPhone'),
+              _buildStepItem('2', 'Tap "My Watch" tab'),
+              _buildStepItem('3', 'Scroll down and tap "Emergency SOS"'),
+              _buildStepItem('4', 'Tap "Fall Detection"'),
+              _buildStepItem('5', 'Toggle Fall Detection ON'),
+              _buildStepItem('6', 'Choose "Always On" for best coverage'),
+              SizedBox(height: 16.h),
+              Container(
+                padding: EdgeInsets.all(12.w),
+                decoration: BoxDecoration(
+                  color: Colors.green.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8.w),
+                  border: Border.all(color: Colors.green.withOpacity(0.3)),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.check_circle, color: Colors.green, size: 20.sp),
+                    SizedBox(width: 8.w),
+                    Expanded(
+                      child: Text(
+                        'Once enabled, falls detected by Apple will automatically sync to Kindura via HealthKit.',
+                        style: TextStyle(
+                          fontSize: 12.sp,
+                          color: Colors.green.shade700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(height: 12.h),
+              Text(
+                'Note: Apple\'s fall detection is designed for hard falls. It requires the Watch to detect free-fall, hard impact, and post-fall immobility.',
+                style: TextStyle(
+                  fontSize: 11.sp,
+                  color: Theme.of(context).textTheme.bodySmall?.color,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Get.back(),
+            child: Text(
+              'Got it',
+              style: TextStyle(
+                color: AppColor.primaryColor,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ),
+      barrierDismissible: true,
+    );
+  }
+
+  Widget _buildStepItem(String number, String text) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: 8.h),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 24.w,
+            height: 24.w,
+            decoration: BoxDecoration(
+              color: AppColor.primaryColor,
+              shape: BoxShape.circle,
+            ),
+            child: Center(
+              child: Text(
+                number,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12.sp,
+                ),
+              ),
+            ),
+          ),
+          SizedBox(width: 12.w),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(
+                fontSize: 13.sp,
+                color: Get.isDarkMode ? Colors.white70 : Colors.black87,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInlineStep(BuildContext context, String number, String text) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: 6.h),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 20.w,
+            height: 20.w,
+            decoration: BoxDecoration(
+              color: Colors.orange,
+              shape: BoxShape.circle,
+            ),
+            child: Center(
+              child: Text(
+                number,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 11.sp,
+                ),
+              ),
+            ),
+          ),
+          SizedBox(width: 10.w),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(
+                fontSize: 12.sp,
+                color: Theme.of(context).textTheme.bodyLarge?.color,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 

@@ -141,6 +141,7 @@ class HealthManager: NSObject, ObservableObject, WCSessionDelegate, HKWorkoutSes
 
     private var heartRateQuery: HKObserverQuery?
     private var sleepQuery: HKObserverQuery?
+    private var fallObserverQuery: HKObserverQuery?  // Observer for HealthKit falls (Apple native + ours)
     private var realTimeHeartRateQuery: HKAnchoredObjectQuery?
     private var realTimeBloodOxygenQuery: HKAnchoredObjectQuery?
     private var realTimeHRVQuery: HKAnchoredObjectQuery?
@@ -1256,9 +1257,46 @@ class HealthManager: NSObject, ObservableObject, WCSessionDelegate, HKWorkoutSes
             }
         }
 
+        // Fall Observer - catches Apple's native fall detection AND our own falls written to HealthKit
+        if let fallType = HKObjectType.quantityType(forIdentifier: .numberOfTimesFallen) {
+            fallObserverQuery = HKObserverQuery(sampleType: fallType, predicate: nil) { [weak self] _, completionHandler, error in
+                if let error = error {
+                    print("[HealthManager] ❌ Fall observer error: \(error.localizedDescription)")
+                    completionHandler()
+                    return
+                }
+
+                print("[HealthManager] 🚨 HealthKit fall observer triggered - fetching new fall data")
+                self?.fetchFallData()
+
+                // Also notify iPhone about the new fall
+                DispatchQueue.main.async {
+                    self?.handleHealthKitFallDetected()
+                }
+
+                completionHandler()
+            }
+
+            if let query = fallObserverQuery {
+                healthStore.execute(query)
+                print("[HealthManager] ✅ Fall observer query started - monitoring for Apple native + Kindura falls")
+            }
+        }
+
         // Enable background delivery
         healthStore.enableBackgroundDelivery(for: HKObjectType.quantityType(forIdentifier: .heartRate)!, frequency: .immediate) { _, _ in }
         healthStore.enableBackgroundDelivery(for: HKObjectType.categoryType(forIdentifier: .sleepAnalysis)!, frequency: .hourly) { _, _ in }
+
+        // Enable background delivery for falls - immediate notification when Apple detects a fall
+        if let fallType = HKObjectType.quantityType(forIdentifier: .numberOfTimesFallen) {
+            healthStore.enableBackgroundDelivery(for: fallType, frequency: .immediate) { success, error in
+                if success {
+                    print("[HealthManager] ✅ Background delivery enabled for falls")
+                } else if let error = error {
+                    print("[HealthManager] ❌ Failed to enable background delivery for falls: \(error.localizedDescription)")
+                }
+            }
+        }
 
         isSleepMonitoringActive = true
     }
@@ -1471,9 +1509,16 @@ class HealthManager: NSObject, ObservableObject, WCSessionDelegate, HKWorkoutSes
         return result
     }
 
-    // MARK: - Fall Detection
+    // MARK: - Fall Detection (HealthKit Sync)
+
+    /// Fetches fall data from HealthKit - includes BOTH Apple's native fall detection AND our CoreMotion detections
     func fetchFallData() {
-        guard let fallType = HKQuantityType.quantityType(forIdentifier: .numberOfTimesFallen) else { return }
+        guard let fallType = HKQuantityType.quantityType(forIdentifier: .numberOfTimesFallen) else {
+            print("[HealthManager] ❌ numberOfTimesFallen type not available")
+            return
+        }
+
+        print("[HealthManager] 🔍 Fetching fall data from HealthKit...")
 
         // Get falls from last 30 days
         let now = Date()
@@ -1481,15 +1526,102 @@ class HealthManager: NSObject, ObservableObject, WCSessionDelegate, HKWorkoutSes
         let predicate = HKQuery.predicateForSamples(withStart: thirtyDaysAgo, end: now, options: .strictEndDate)
 
         let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
-        let query = HKSampleQuery(sampleType: fallType, predicate: predicate, limit: 10, sortDescriptors: [sortDescriptor]) { [weak self] _, samples, _ in
-            guard let samples = samples as? [HKQuantitySample] else { return }
+        let query = HKSampleQuery(sampleType: fallType, predicate: predicate, limit: 50, sortDescriptors: [sortDescriptor]) { [weak self] _, samples, error in
+            if let error = error {
+                print("[HealthManager] ❌ Error fetching falls from HealthKit: \(error.localizedDescription)")
+                return
+            }
 
-            let falls = samples.map { sample in
-                FallEvent(date: sample.startDate, resolved: true)
+            guard let samples = samples as? [HKQuantitySample] else {
+                print("[HealthManager] ⚠️ No fall samples found in HealthKit (last 30 days)")
+                return
+            }
+
+            print("[HealthManager] 📊 Found \(samples.count) fall(s) in HealthKit")
+
+            // Log details of each fall sample
+            for (index, sample) in samples.enumerated() {
+                let source = sample.sourceRevision.source.name
+                let bundleId = sample.sourceRevision.source.bundleIdentifier
+                let metadata = sample.metadata ?? [:]
+                let fallSource = metadata["com.kindura.fallSource"] as? String ?? "Apple/Unknown"
+
+                print("[HealthManager] 🚨 Fall \(index + 1): date=\(sample.startDate), source=\(source), bundleId=\(bundleId), fallSource=\(fallSource)")
+            }
+
+            // Convert samples to FallEvents
+            let falls = samples.map { sample -> FallEvent in
+                // Try to extract severity from metadata (if we wrote it)
+                let metadata = sample.metadata ?? [:]
+                let severityFromMeta = metadata["com.kindura.severity"] as? String
+                let impactGFromMeta = metadata["com.kindura.impactG"] as? Double
+
+                // Determine if this is an Apple native fall or our detection
+                let source = sample.sourceRevision.source.bundleIdentifier
+                let isAppleNative = !source.contains("kindura")
+
+                return FallEvent(
+                    date: sample.startDate,
+                    resolved: true,
+                    severity: severityFromMeta ?? (isAppleNative ? "apple_native" : "unknown"),
+                    impactG: impactGFromMeta ?? 0.0
+                )
             }
 
             DispatchQueue.main.async {
+                let previousCount = self?.recentFalls.count ?? 0
                 self?.recentFalls = falls
+                print("[HealthManager] ✅ Updated recentFalls: \(previousCount) → \(falls.count) falls")
+            }
+        }
+
+        healthStore.execute(query)
+    }
+
+    /// Called when HealthKit observer detects a new fall - could be Apple native or our CoreMotion detection
+    private func handleHealthKitFallDetected() {
+        print("[HealthManager] 🚨 HealthKit fall detected - querying for latest fall...")
+
+        guard let fallType = HKQuantityType.quantityType(forIdentifier: .numberOfTimesFallen) else { return }
+
+        // Get only the most recent fall
+        let now = Date()
+        let fiveMinutesAgo = now.addingTimeInterval(-300)  // Last 5 minutes
+        let predicate = HKQuery.predicateForSamples(withStart: fiveMinutesAgo, end: now, options: .strictEndDate)
+
+        let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
+        let query = HKSampleQuery(sampleType: fallType, predicate: predicate, limit: 1, sortDescriptors: [sortDescriptor]) { [weak self] _, samples, error in
+            guard let sample = (samples as? [HKQuantitySample])?.first else {
+                print("[HealthManager] ⚠️ No recent fall found in HealthKit")
+                return
+            }
+
+            let source = sample.sourceRevision.source.bundleIdentifier
+            let isAppleNative = !source.contains("kindura")
+
+            print("[HealthManager] 🚨 Latest fall: date=\(sample.startDate), isAppleNative=\(isAppleNative), source=\(source)")
+
+            // If this is an Apple native fall detection (not from our app), send alert to iPhone
+            if isAppleNative {
+                print("[HealthManager] 📱 Apple native fall detected - sending alert to iPhone")
+
+                // Create a FallEvent and send alert
+                let fallEvent = FallEvent(
+                    date: sample.startDate,
+                    resolved: false,  // Needs user response
+                    severity: "apple_native",
+                    impactG: 0.0  // Apple doesn't expose impact force
+                )
+
+                DispatchQueue.main.async {
+                    // Add to recent falls if not already present
+                    if !(self?.recentFalls.contains(where: { abs($0.date.timeIntervalSince(fallEvent.date)) < 1 }) ?? false) {
+                        self?.recentFalls.insert(fallEvent, at: 0)
+                    }
+
+                    // Send fall alert to iPhone
+                    self?.sendFallAlertToiPhone(fallEvent: fallEvent)
+                }
             }
         }
 

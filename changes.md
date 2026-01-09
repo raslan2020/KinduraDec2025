@@ -4,6 +4,78 @@
 
 ---
 
+## 2026-01-09 - Fall Detection HealthKit Sync Improvements (Complete)
+
+### Problem
+User enabled Apple's native Fall Detection on their Apple Watch, but no falls were showing in HealthKit or Kindura. The app was relying solely on CoreMotion detection and not properly syncing with HealthKit where Apple's native falls are written.
+
+### Solution
+Implemented bidirectional HealthKit sync for falls: our CoreMotion detections write to HealthKit, AND we read from HealthKit to capture Apple's native fall detections.
+
+### Implementation
+
+**1. watchOS HealthManager (watchos/KinduraWatch/HealthManager.swift)**
+- NEW `fallObserverQuery: HKObserverQuery?` property - background observer for HealthKit falls
+- NEW fall observer in `startBackgroundHealthQueries()` - catches Apple native + Kindura falls
+- NEW background delivery enabled for `numberOfTimesFallen` with `.immediate` frequency
+- IMPROVED `fetchFallData()` with comprehensive logging:
+  - Logs source of each fall (Apple/Kindura bundle ID)
+  - Extracts metadata for severity/impactG if present
+  - Distinguishes Apple native falls vs our CoreMotion detections
+- NEW `handleHealthKitFallDetected()` method:
+  - Queries most recent fall from HealthKit
+  - Detects if it's an Apple native fall (different bundle ID)
+  - Creates FallEvent and sends alert to iPhone for Apple native falls
+
+**2. Flutter Profile Screen (lib/screens/profile/profile_screen.dart)**
+- NEW "Fall Detection" settings section in Settings dialog
+- NEW `_showFallDetectionGuide()` method with step-by-step instructions:
+  - Opens Watch app → My Watch → Emergency SOS → Fall Detection
+  - Recommends "Always On" for best coverage
+  - Explains that Apple falls sync via HealthKit automatically
+- NEW `_buildStepItem()` helper widget for numbered step list
+- Added info box explaining dual-source fall detection (Apple + Kindura)
+
+### Data Flow
+```
+Apple Native Fall Detection (System-Level)
+    │
+    └──► Writes to HealthKit (numberOfTimesFallen)
+              │
+              └──► HKObserverQuery triggers (background delivery)
+                        │
+                        └──► handleHealthKitFallDetected()
+                                  │
+                                  ├──► Identifies source (Apple vs Kindura)
+                                  │
+                                  └──► Sends fall alert to iPhone
+                                            │
+                                            └──► Flutter receives + shows alert
+
+Kindura CoreMotion Fall Detection
+    │
+    └──► Detects via accelerometer
+              │
+              ├──► Writes to HealthKit (with Kindura metadata)
+              │
+              └──► Sends fall alert to iPhone directly
+```
+
+### Key Insight
+Apple's native Fall Detection (enabled in Watch Settings → Emergency SOS → Fall Detection):
+- Works at the SYSTEM level, not app level
+- Requires: free-fall + hard impact + post-fall immobility
+- Writes falls to HealthKit automatically
+- Works even when Kindura isn't running
+
+Our solution now reads FROM HealthKit to capture these Apple native detections, ensuring comprehensive fall coverage from both sources.
+
+### Files Modified
+- `watchos/KinduraWatch/HealthManager.swift` - Background observer + improved fetchFallData
+- `lib/screens/profile/profile_screen.dart` - Fall Detection settings UI
+
+---
+
 ## 2026-01-09 - Medication Reminders Push to Apple Watch (Complete)
 
 ### Feature
