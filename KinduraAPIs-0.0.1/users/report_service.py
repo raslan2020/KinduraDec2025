@@ -19,14 +19,36 @@ class ReportService:
     Service class for generating enhanced Kindura patient reports
     """
 
-    def __init__(self, user):
+    def __init__(self, user, report_instance=None):
         self.user = user
+        self.report_instance = report_instance  # For progress tracking
         openai.api_key = os.getenv('OPENAI_API_KEY')
+
+    def _update_progress(self, progress, save=True):
+        """Update report progress in database"""
+        if self.report_instance:
+            self.report_instance.progress = progress
+            if save:
+                self.report_instance.save(update_fields=['progress', 'updated_at'])
+            logger.info(f"Report {self.report_instance.id} progress: {progress}%")
 
     def generate_comprehensive_report(self, report_type='daily'):
         """
         Generate a comprehensive report with all analytics
+        Progress stages:
+        - 5%: Started, determining date range
+        - 15%: Collecting observations
+        - 25%: Collecting medication data
+        - 40%: Collecting vitals data
+        - 55%: Collecting sleep data
+        - 65%: Collecting fall data
+        - 75%: Collecting biomarker data
+        - 85%: Calculating health scores
+        - 95%: Running AI analysis
+        - 100%: Complete
         """
+        self._update_progress(5)
+
         # Determine date range
         today = date.today()
         if report_type == 'daily':
@@ -48,20 +70,34 @@ class ReportService:
             'generated_at': timezone.now(),
         }
 
-        # Collect each type of data
+        # Collect each type of data with progress updates
+        self._update_progress(15)
         report_data['observations'] = self._collect_observations(period_start, period_end)
+
+        self._update_progress(25)
         report_data['medication_data'] = self._collect_medication_data(period_start, period_end)
+
+        self._update_progress(40)
         report_data['vitals_data'] = self._collect_vitals_data(period_start, period_end)
+
+        self._update_progress(55)
         report_data['sleep_data'] = self._collect_sleep_data(period_start, period_end)
+
+        self._update_progress(65)
         report_data['fall_data'] = self._collect_fall_data(period_start, period_end)
+
+        self._update_progress(75)
         report_data['biomarker_data'] = self._collect_biomarker_data(period_start, period_end)
 
         # Calculate health scores
+        self._update_progress(85)
         report_data['scores'] = self._calculate_health_scores(report_data)
 
-        # Generate AI analysis
+        # Generate AI analysis (this takes the longest)
+        self._update_progress(90)
         report_data['ai_analysis'] = self._generate_ai_analysis(report_data, report_type)
 
+        self._update_progress(100, save=False)  # Will be saved with final report data
         return report_data
 
     def _collect_observations(self, period_start, period_end):
@@ -305,17 +341,17 @@ class ReportService:
         awakenings_list = []
 
         for v in vitals:
-            if v.sleep_hours:
+            if v.total_sleep_hours:
                 sleep_records.append({
                     'date': v.recorded_at.strftime('%Y-%m-%d'),
-                    'total_hours': v.sleep_hours,
+                    'total_hours': v.total_sleep_hours,
                     'quality': v.sleep_quality,
                     'deep_hours': v.deep_sleep_hours,
                     'rem_hours': v.rem_sleep_hours,
                     'light_hours': v.core_sleep_hours,
-                    'awakenings': v.awakenings,
+                    'awakenings': v.awakenings_count,
                 })
-                total_hours.append(v.sleep_hours)
+                total_hours.append(v.total_sleep_hours)
                 if v.sleep_quality:
                     # Convert quality to numeric (good=3, fair=2, poor=1)
                     quality_map = {'good': 3, 'fair': 2, 'poor': 1}
@@ -326,8 +362,8 @@ class ReportService:
                     rem_sleep.append(v.rem_sleep_hours)
                 if v.core_sleep_hours:
                     light_sleep.append(v.core_sleep_hours)
-                if v.awakenings:
-                    awakenings_list.append(v.awakenings)
+                if v.awakenings_count:
+                    awakenings_list.append(v.awakenings_count)
 
         # Analyze sleep patterns
         patterns = []
@@ -727,7 +763,7 @@ Be specific, actionable, and clinically relevant. Focus on patterns and correlat
             }
 
     def save_report(self, report_data):
-        """Save the generated report to the database"""
+        """Save the generated report to the database and mark as completed"""
         from .models import PatientReport
 
         ai_analysis = report_data.get('ai_analysis', {})
@@ -739,6 +775,66 @@ Be specific, actionable, and clinically relevant. Focus on patterns and correlat
         biomarker_data = report_data.get('biomarker_data', {})
         observations = report_data.get('observations', {})
 
+        # If we have a report instance (background generation), update it directly
+        if self.report_instance:
+            report = self.report_instance
+            # Update all fields on the existing instance
+            report.period_start = report_data['period_start']
+            report.period_end = report_data['period_end']
+            report.total_doses_scheduled = med_data.get('total_doses_scheduled', 0)
+            report.doses_taken = med_data.get('doses_taken', 0)
+            report.doses_missed = med_data.get('doses_missed', 0)
+            report.doses_late = med_data.get('doses_late', 0)
+            report.adherence_percentage = med_data.get('adherence_percentage', 0)
+            report.side_effects_reported = med_data.get('side_effects', [])
+            report.side_effects_count = len(med_data.get('side_effects', []))
+            report.overall_health_score = scores.get('overall_score', 0)
+            report.adherence_score = scores.get('adherence_score', 0)
+            report.sleep_score = scores.get('sleep_score', 0)
+            report.vitals_score = scores.get('vitals_score', 0)
+            report.vitals_analytics = {
+                'heart_rate': vitals_data.get('heart_rate', {}),
+                'blood_oxygen': vitals_data.get('blood_oxygen', {}),
+                'hrv': vitals_data.get('hrv', {}),
+            }
+            report.sleep_analytics = {
+                'records': sleep_data.get('records', []),
+                'avg_hours': sleep_data.get('avg_hours'),
+                'patterns': sleep_data.get('patterns', []),
+                'stages': {
+                    'deep': sleep_data.get('avg_deep_sleep'),
+                    'rem': sleep_data.get('avg_rem_sleep'),
+                    'light': sleep_data.get('avg_light_sleep'),
+                },
+            }
+            report.fall_events = fall_data.get('events', [])
+            report.fall_count = fall_data.get('total_falls', 0)
+            report.medication_analytics = med_data.get('medication_analytics', {})
+            report.biomarker_trends = {
+                'biomarkers': biomarker_data.get('biomarkers', {}),
+                'abnormalities': biomarker_data.get('abnormalities', []),
+                'critical_abnormalities': biomarker_data.get('critical_abnormalities', []),
+                'abnormal_count': biomarker_data.get('abnormal_count', 0),
+                'critical_count': biomarker_data.get('critical_count', 0),
+            }
+            report.ai_summary = ai_analysis.get('doctor_summary', '')
+            report.ai_observations = ', '.join(ai_analysis.get('concerns', []))
+            report.ai_recommendations = ', '.join(ai_analysis.get('recommendations', []))
+            report.ai_concerns = ', '.join(ai_analysis.get('concerns', []))
+            report.ai_sleep_analysis = ai_analysis.get('sleep_analysis', '')
+            report.ai_vitals_analysis = ai_analysis.get('vitals_analysis', '')
+            report.ai_medication_insights = ai_analysis.get('medication_insights', '')
+            report.ai_side_effect_correlations = ai_analysis.get('side_effect_correlations', '')
+            report.ai_doctor_summary = ai_analysis.get('doctor_summary', '')
+            report.ai_patient_summary = ai_analysis.get('patient_summary', '')
+            report.conversation_count = observations.get('total_count', 0)
+            # Mark as completed
+            report.status = 'completed'
+            report.progress = 100
+            report.save()
+            return report
+
+        # Fallback to update_or_create for direct calls (non-background)
         report, created = PatientReport.objects.update_or_create(
             user=self.user,
             report_type=report_data['report_type'],
@@ -746,6 +842,8 @@ Be specific, actionable, and clinically relevant. Focus on patterns and correlat
             defaults={
                 'period_start': report_data['period_start'],
                 'period_end': report_data['period_end'],
+                'status': 'completed',
+                'progress': 100,
                 # Medication stats
                 'total_doses_scheduled': med_data.get('total_doses_scheduled', 0),
                 'doses_taken': med_data.get('doses_taken', 0),

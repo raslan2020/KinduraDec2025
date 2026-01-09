@@ -17,43 +17,56 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Ask user for device type
 echo ""
 echo "📱 Select run mode:"
-echo "  1) iOS Simulator (iPhone 16)"
-echo "  2) Real iPhone (Physical Device)"
+echo "  1) iOS Simulator (iPhone 16) + Watch Simulator"
+echo "  2) Real iPhone Only (Physical Device)"
 echo "  3) Real iPhone + Apple Watch (Physical Devices)"
 echo "  4) Backend Only (Django + LiveKit Agent)"
+echo "  5) Watch App Only (Build & Install)"
 echo ""
-read -p "Enter choice [1-4]: " DEVICE_CHOICE
+read -p "Enter choice [1-5]: " DEVICE_CHOICE
 
 case $DEVICE_CHOICE in
     1)
         USE_SIMULATOR=true
         USE_REAL_WATCH=false
         BACKEND_ONLY=false
-        echo "✅ Using iOS Simulator"
+        WATCH_ONLY=false
+        echo "✅ Using iOS Simulator + Watch Simulator"
         ;;
     2)
         USE_SIMULATOR=false
         USE_REAL_WATCH=false
         BACKEND_ONLY=false
+        WATCH_ONLY=false
         echo "✅ Using Real iPhone"
         ;;
     3)
         USE_SIMULATOR=false
         USE_REAL_WATCH=true
         BACKEND_ONLY=false
+        WATCH_ONLY=false
         echo "✅ Using Real iPhone + Apple Watch"
         ;;
     4)
         USE_SIMULATOR=false
         USE_REAL_WATCH=false
         BACKEND_ONLY=true
+        WATCH_ONLY=false
         echo "✅ Backend Only Mode - Starting Django + LiveKit Agent"
+        ;;
+    5)
+        USE_SIMULATOR=false
+        USE_REAL_WATCH=false
+        BACKEND_ONLY=false
+        WATCH_ONLY=true
+        echo "✅ Watch App Only - Building and Installing"
         ;;
     *)
         echo "Invalid choice. Defaulting to iOS Simulator."
         USE_SIMULATOR=true
         USE_REAL_WATCH=false
         BACKEND_ONLY=false
+        WATCH_ONLY=false
         ;;
 esac
 echo ""
@@ -263,6 +276,111 @@ if [ "$BACKEND_ONLY" = true ]; then
     echo ""
     read -p "Press Enter to stop backend services..."
     cleanup
+    exit 0
+fi
+
+# Handle Watch Only Mode
+if [ "$WATCH_ONLY" = true ]; then
+    echo ""
+    echo "⌚ Building and Installing Apple Watch App Only..."
+    echo ""
+
+    # Ask for simulator or real device
+    echo "Select Watch target:"
+    echo "  1) Watch Simulator"
+    echo "  2) Real Apple Watch"
+    read -p "Enter choice [1-2]: " WATCH_TARGET
+
+    cd "$SCRIPT_DIR/watchos"
+
+    if [ "$WATCH_TARGET" = "2" ]; then
+        # Build for real device
+        echo "🔨 Building KinduraWatch for Real Apple Watch..."
+        xcodebuild -project KinduraWatch.xcodeproj \
+            -scheme KinduraWatch \
+            -destination 'generic/platform=watchOS' \
+            -configuration Debug \
+            -derivedDataPath build \
+            clean build 2>&1 | tee /tmp/watch_build.log | grep -E "(BUILD|error:|warning:|\*\*)" || true
+
+        if grep -q "BUILD SUCCEEDED" /tmp/watch_build.log; then
+            echo "✅ watchOS app built successfully"
+
+            WATCH_APP=$(find build -name "KinduraWatch.app" -path "*Debug-watchos*" -type d 2>/dev/null | head -1)
+
+            if [ -n "$WATCH_APP" ]; then
+                echo "📱 Built app: $WATCH_APP"
+
+                # Find connected Watch
+                echo "🔍 Looking for connected Apple Watch..."
+                WATCH_UDID=$(xcrun devicectl list devices 2>/dev/null | grep -i "watch" | grep "available" | head -1 | awk '{print $3}')
+
+                if [ -n "$WATCH_UDID" ]; then
+                    echo "📲 Installing on Apple Watch ($WATCH_UDID)..."
+                    xcrun devicectl device install app --device "$WATCH_UDID" "$WATCH_APP" 2>&1
+                    echo ""
+                    echo "✅ App installed! Launch from Apple Watch home screen."
+                else
+                    echo "⚠️  No Apple Watch found. Make sure Watch is connected and unlocked."
+                    echo ""
+                    echo "📁 Built app location:"
+                    echo "   $WATCH_APP"
+                    echo ""
+                    echo "💡 To install manually:"
+                    echo "   1. Open Xcode"
+                    echo "   2. Window → Devices and Simulators"
+                    echo "   3. Select your Watch"
+                    echo "   4. Drag the .app file to installed apps"
+                fi
+            fi
+        else
+            echo "❌ Build FAILED. Check /tmp/watch_build.log"
+            grep -A2 "error:" /tmp/watch_build.log || true
+        fi
+    else
+        # Build for simulator
+        echo "🔨 Building KinduraWatch for Simulator..."
+
+        # Open Simulator first
+        echo "📱 Opening Simulator..."
+        open -a Simulator
+        sleep 5
+
+        xcodebuild -project KinduraWatch.xcodeproj \
+            -scheme KinduraWatch \
+            -sdk watchsimulator \
+            -configuration Debug \
+            -derivedDataPath build \
+            clean build 2>&1 | tee /tmp/watch_build.log | grep -E "(BUILD|error:|warning:|\*\*)" || true
+
+        if grep -q "BUILD SUCCEEDED" /tmp/watch_build.log; then
+            echo "✅ watchOS app built successfully"
+
+            WATCH_APP=$(find build -name "KinduraWatch.app" -path "*Debug-watchsimulator*" -type d 2>/dev/null | head -1)
+
+            if [ -n "$WATCH_APP" ]; then
+                # Find Watch simulator
+                WATCH_UDID=$(xcrun simctl list devices available | grep -i "Apple Watch" | head -1 | grep -oE '[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}')
+
+                if [ -n "$WATCH_UDID" ]; then
+                    xcrun simctl boot "$WATCH_UDID" 2>/dev/null || true
+                    sleep 2
+                    xcrun simctl install "$WATCH_UDID" "$WATCH_APP"
+                    xcrun simctl launch "$WATCH_UDID" com.kindura.ai.watchkitapp
+                    echo "✅ KinduraWatch launched on Watch Simulator"
+                else
+                    echo "⚠️  No Watch simulator found. Add one in Xcode → Window → Devices and Simulators"
+                fi
+            fi
+        else
+            echo "❌ Build FAILED"
+            grep -A2 "error:" /tmp/watch_build.log || true
+        fi
+    fi
+
+    echo ""
+    echo "📚 Watch App Documentation: $SCRIPT_DIR/watchos/watchapp.md"
+    echo ""
     exit 0
 fi
 

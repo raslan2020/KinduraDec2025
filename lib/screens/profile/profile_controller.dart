@@ -34,6 +34,7 @@ class ProfileController extends GetxController {
   final selectedLanguage = ''.obs;
   final selectedUnitSystem = 'US'.obs; // US or SI
   final acceptedTerms = false.obs;
+  final allowAgentMedicationUpdates = false.obs; // Allow Kindura AI to mark medications
   final requestStatus = Status.COMPLETED.obs;
 
   // Unit system options with display labels
@@ -129,6 +130,8 @@ class ProfileController extends GetxController {
           homeController.userProfile.value.result?.termsAndConditions ?? false;
       selectedUnitSystem.value =
           homeController.userProfile.value.result?.unitSystem ?? 'US';
+      allowAgentMedicationUpdates.value =
+          homeController.userProfile.value.result?.allowAgentMedicationUpdates ?? false;
     }
   }
 
@@ -247,6 +250,7 @@ class ProfileController extends GetxController {
               ? 'M'
               : 'D',
       "unit_system": selectedUnitSystem.value,
+      "allow_agent_medication_updates": allowAgentMedicationUpdates.value,
     };
     print("the data is $data");
 

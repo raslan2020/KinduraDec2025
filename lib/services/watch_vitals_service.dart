@@ -55,6 +55,7 @@ class WatchVitalsService with WidgetsBindingObserver {
   Function(Map<String, dynamic>)? onVitalsReceived;
   Function(Map<String, dynamic>)? onFallDetected;
   Function(String type)? onHealthKitDataChanged;
+  Function(Map<String, dynamic>)? onMedicationReminderResponse;
 
   /// Get the current data source mode
   DataSourceMode get currentMode => _userOverrideMode ?? _currentMode;
@@ -117,6 +118,13 @@ class WatchVitalsService with WidgetsBindingObserver {
 
         // Notify listeners about the change
         onHealthKitDataChanged?.call(type);
+      } else if (call.method == 'onMedicationReminderResponse') {
+        // Medication reminder response from Apple Watch
+        final response = Map<String, dynamic>.from(call.arguments as Map);
+        print('[WatchVitalsService] 💊 Medication reminder response from Watch: $response');
+
+        // Notify listeners about the medication reminder response
+        onMedicationReminderResponse?.call(response);
       }
       return null;
     });
@@ -803,6 +811,53 @@ class WatchVitalsService with WidgetsBindingObserver {
     } catch (e) {
       print('[WatchVitalsService] ❌ Get Watch monitoring status error: $e');
       return {'status': 'error', 'error': e.toString()};
+    }
+  }
+
+  // MARK: - Medication Reminder Push to Watch
+
+  /// Send a medication reminder to Apple Watch
+  /// The Watch will display the reminder and allow user to respond with Take/Skip/Snooze
+  /// Returns true if the reminder was sent successfully (or queued for delivery)
+  Future<bool> sendMedicationReminder({
+    required String medicationId,
+    required String medicationName,
+    required String dosage,
+    required String form,
+    required DateTime scheduledTime,
+    String? instructions,
+    required bool isFollowUp,
+    int? followUpNumber,
+    bool requiresEscalation = false,
+  }) async {
+    try {
+      print('[WatchVitalsService] 💊 Sending medication reminder to Watch: $medicationName');
+
+      final result = await _channel.invokeMethod<bool>('sendMedicationReminder', {
+        'medication_id': medicationId,
+        'medication_name': medicationName,
+        'dosage': dosage,
+        'form': form,
+        'scheduled_time': scheduledTime.toIso8601String(),
+        'instructions': instructions ?? '',
+        'is_follow_up': isFollowUp,
+        'follow_up_number': followUpNumber ?? 0,
+        'requires_escalation': requiresEscalation,
+      });
+
+      if (result == true) {
+        print('[WatchVitalsService] 💊 ✅ Medication reminder sent to Watch');
+        return true;
+      } else {
+        print('[WatchVitalsService] 💊 ⚠️ Medication reminder send returned false');
+        return false;
+      }
+    } on PlatformException catch (e) {
+      print('[WatchVitalsService] 💊 ❌ Platform error sending reminder: ${e.code} - ${e.message}');
+      return false;
+    } catch (e) {
+      print('[WatchVitalsService] 💊 ❌ Error sending medication reminder: $e');
+      return false;
     }
   }
 

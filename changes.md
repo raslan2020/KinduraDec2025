@@ -1,6 +1,623 @@
 # Kindura Development Changes Log
 
-**Last Updated**: 2025-12-30
+**Last Updated**: 2026-01-09
+
+---
+
+## 2026-01-09 - Medication Reminders Push to Apple Watch (Complete)
+
+### Feature
+When medication reminders fire on iPhone, they now also push to Apple Watch. Users can mark medications as taken/skipped/snoozed directly from their Watch.
+
+### Implementation
+
+**1. iOS AppDelegate (ios/Runner/AppDelegate.swift)**
+- NEW `sendMedicationReminder` method channel case (line 204)
+- NEW `sendMedicationReminderToWatch()` method - sends reminder via WCSession
+- NEW `queueMedicationReminderForDelivery()` - guaranteed delivery fallback
+- NEW handler for `medication_reminder_response` in `didReceiveMessage`
+
+**2. watchOS HealthManager (watchos/KinduraWatch/HealthManager.swift)**
+- NEW `MedicationReminder` struct - parses reminder payload from iPhone
+- NEW `@Published` properties: `currentMedicationReminder`, `showMedicationReminderAlert`, `pendingMedicationReminders`
+- NEW handler in `didReceiveMessage` for `medication_reminder`
+- NEW `handleMedicationReminder()` - processes incoming reminders, plays haptic
+- NEW `sendMedicationReminderResponse()` - sends taken/skipped/snoozed response
+- NEW `bufferMedicationResponse()` - guaranteed delivery for responses
+- NEW `dismissCurrentReminder()` - handles queued reminders
+
+**3. watchOS MedicationReminderView (NEW FILE: watchos/KinduraWatch/MedicationReminderView.swift)**
+- SwiftUI view showing medication name, dosage, time, instructions
+- Three action buttons: "Take Now" (green), "Snooze 15m" (orange), "Skip" (gray)
+- Form icon mapping for different medication types
+- Urgency indicator for follow-up reminders
+- Haptic feedback on button press
+
+**4. watchOS ContentView (watchos/KinduraWatch/ContentView.swift)**
+- Added `.sheet(isPresented:)` modifier to present MedicationReminderView
+
+**5. Flutter WatchVitalsService (lib/services/watch_vitals_service.dart)**
+- NEW `onMedicationReminderResponse` callback
+- NEW `sendMedicationReminder()` method - invokes native channel
+- NEW handler in `_setupMethodCallHandler()` for `onMedicationReminderResponse`
+
+**6. Flutter NotificationService (lib/services/notification_service.dart)**
+- NEW `_setupWatchResponseHandler()` - registers Watch response callback
+- NEW `_handleWatchMedicationResponse()` - processes Watch responses
+- NEW `_sendReminderToWatch()` - sends reminder to Watch when timer fires
+- Modified `_showMedicationReminder()` to also call `_sendReminderToWatch()`
+
+### Data Flow
+```
+Flutter NotificationService (Timer fires)
+    │
+    ├──► _showMedicationReminder() ──► AlertDialog on iPhone
+    │
+    └──► _sendReminderToWatch()
+              │
+              └──► WatchVitalsService.sendMedicationReminder()
+                        │
+                        └──► iOS MethodChannel
+                                  │
+                                  └──► sendMedicationReminderToWatch()
+                                            │
+                                            ├──► sendMessage() (if Watch reachable)
+                                            │         │
+                                            │         └──► Watch: handleMedicationReminder()
+                                            │                    │
+                                            │                    ├──► Play haptic
+                                            │                    │
+                                            │                    └──► Show MedicationReminderView
+                                            │
+                                            └──► transferUserInfo() (fallback)
+
+Watch User Action (Take/Skip/Snooze)
+    │
+    └──► sendMedicationReminderResponse()
+              │
+              └──► sendMessage() to iPhone
+                        │
+                        └──► iOS didReceiveMessage
+                                  │
+                                  └──► Flutter MethodChannel callback
+                                            │
+                                            └──► _handleWatchMedicationResponse()
+                                                      │
+                                                      ├──► "taken" ──► recordDoseTaken()
+                                                      │
+                                                      ├──► "skipped" ──► recordDoseSkipped()
+                                                      │
+                                                      └──► "snoozed" ──► _scheduleReminder() +15min
+```
+
+### Payload Structures
+
+**iPhone → Watch (medication_reminder)**
+```json
+{
+  "type": "medication_reminder",
+  "reminder_id": "uuid",
+  "medication_id": "123",
+  "medication_name": "Metformin",
+  "dosage": "500 mg",
+  "form": "tablet",
+  "scheduled_time": "2026-01-09T08:00:00Z",
+  "instructions": "Take with food",
+  "is_follow_up": false,
+  "follow_up_number": 0,
+  "requires_escalation": false
+}
+```
+
+**Watch → iPhone (medication_reminder_response)**
+```json
+{
+  "type": "medication_reminder_response",
+  "reminder_id": "uuid",
+  "medication_id": "123",
+  "action": "taken",
+  "scheduled_time": "2026-01-09T08:00:00Z",
+  "taken_at": "2026-01-09T08:05:23Z",
+  "source": "apple_watch"
+}
+```
+
+### Files Modified
+- `ios/Runner/AppDelegate.swift` - Method channel + WCSession send
+- `watchos/KinduraWatch/HealthManager.swift` - Handler + response methods
+- `watchos/KinduraWatch/ContentView.swift` - Sheet presentation
+- `lib/services/watch_vitals_service.dart` - Flutter bridge method
+- `lib/services/notification_service.dart` - Watch integration
+
+### Files Created
+- `watchos/KinduraWatch/MedicationReminderView.swift` - Watch UI
+
+---
+
+## 2026-01-09 - Fall Detection Data Sync Fix (Complete)
+
+### Problem
+iPhone app showed "No falls" even when Apple Watch detected falls. Fall count (`falls_count`) wasn't being displayed correctly on the iPhone home screen.
+
+### Root Cause
+1. **Watch detected falls via CoreMotion but NEVER wrote to HealthKit** - only stored locally
+2. **Watch sent fall alerts without `falls_count`** - iPhone couldn't display cumulative count
+3. **iOS `getHealthSummary()` didn't query HealthKit for falls** - no fall data source
+4. **Watch only requested READ permission** for falls, not WRITE
+
+### Solution (Multi-Layer Fix)
+
+**1. Watch: Write falls to HealthKit (HealthManager.swift)**
+- NEW `saveFallToHealthKit()` function writes detected falls to HealthKit
+- Called from `handleFallDetected()` when CoreMotion detects impact
+- Falls now persist in Apple Health and sync across devices
+
+**2. Watch: Request WRITE permission for falls (HealthManager.swift)**
+- Added `typesToShare` with `numberOfTimesFallen`
+- Watch app will prompt user to allow writing fall data
+- Required for `healthStore.save()` to work
+
+**3. Watch: Include `falls_count` in fall alerts (HealthManager.swift)**
+- Added `falls_count: recentFalls.count` to fall alert payload
+- Added explicit `fall_detected: true` flag
+- Real-time count available immediately when fall detected
+
+**4. iOS: Query HealthKit for falls (AppDelegate.swift)**
+- NEW `fetchTodayFalls()` queries `numberOfTimesFallen` from HealthKit
+- Gets falls written by Watch to Apple Health
+
+**5. iOS: Merge falls from multiple sources (AppDelegate.swift)**
+- Combines falls from HealthKit AND WatchConnectivity
+- Uses maximum of both sources for accurate count
+- Fallback ensures falls are never lost
+
+### Files Modified
+- `watchos/KinduraWatch/HealthManager.swift`:
+  - `saveFallToHealthKit()` - NEW: Writes fall to HealthKit
+  - `handleFallDetected()` - Calls saveFallToHealthKit()
+  - `requestAuthorization()` - Added write permission for falls
+  - `sendFallAlertToiPhone()` - Added `falls_count` to payload
+
+- `ios/Runner/AppDelegate.swift`:
+  - `fetchTodayFalls()` - NEW: Queries falls from HealthKit
+  - `getHealthSummary()` - Merges falls from HealthKit + WatchConnectivity
+
+### Data Flow (Fixed)
+```
+Watch detects fall (CoreMotion)
+    │
+    ├──► saveFallToHealthKit() ─────────────────────┐
+    │         │                                      │
+    │         └──► HealthKit (Apple Health)          │
+    │                    │                           │
+    ├──► recentFalls.append()                        │
+    │                                                │
+    ├──► sendFallAlertToiPhone() with falls_count    │
+    │         │                                      │
+    │         └──► iPhone latestWatchVitals          │
+    │                    │                           │
+    └──► sendVitalsToiPhone() with falls_count       │
+                         │                           │
+                         ▼                           ▼
+iPhone getHealthSummary()
+    │
+    ├──► fetchTodayFalls() ──► HealthKit falls ──────┤
+    │                                                │
+    ├──► latestWatchVitals ──► WatchConnectivity ────┤
+    │                                                │
+    └──► MAX(HealthKit, WatchConnectivity) ──────────┘
+           │
+           ▼
+Flutter displays falls_count on Home screen
+```
+
+### User Action Required
+After rebuilding both Watch and iOS apps:
+1. Open Watch app - it will prompt for HealthKit write permission for falls
+2. Grant permission to allow fall data to sync via Apple Health
+
+---
+
+## 2026-01-08 - Watch → iPhone → Django Reliability Improvements
+
+### Problem
+Watch vitals (BPM, O2, HRV, Br/M, Sleep, Falls, Activity) could be lost if iPhone was unreachable or app restarted before data was sent to Django API.
+
+### Solution: Multi-Layer Reliability
+
+**1. Activity Data Collection (Watch)**
+- Added activity metrics to vitals payload:
+  - Steps count
+  - Calories burned
+  - Distance (km)
+  - Floors climbed
+  - Exercise minutes
+  - Stand minutes
+- Activity data fetched from HealthKit every 60 seconds
+- Included in all vitals transmissions to iPhone
+
+**2. Persistent Buffer (Watch - Survives App Restart)**
+- `UserDefaults` storage for pending vitals
+- `savePendingVitals()` - Saves buffer to disk when iPhone unreachable
+- `loadPendingVitals()` - Loads buffered vitals on app launch
+- `clearPendingVitalsStorage()` - Clears disk after successful sends
+- Buffer limit: 100 vitals to prevent memory issues
+- Uses `DispatchGroup` to track send completion before clearing storage
+
+**3. Guaranteed Delivery via transferUserInfo (Watch)**
+- `sendVitalsViaTransferUserInfo()` - Queues vitals for guaranteed delivery
+- `sendFallAlertViaTransferUserInfo()` - High priority fall alert queue
+- Data queued on Watch OS and delivered when iPhone available
+- Each transfer includes unique `transfer_id` for deduplication
+- Fall alerts ALWAYS use transferUserInfo (critical data)
+
+**4. didReceiveUserInfo Handler (iPhone)**
+- `session(_:didReceiveUserInfo:)` - Receives queued Watch transfers
+- Deduplication using `transfer_id` stored in UserDefaults
+- Handles both `watch_vitals` and `fall_alert` types
+- Forwards data to Django API and notifies Flutter
+- Cleanup of old transfer keys (keeps last 50)
+
+### Files Modified
+- `watchos/KinduraWatch/HealthManager.swift`:
+  - Added activity data properties and fetching
+  - Added UserDefaults persistence for pending vitals
+  - Added transferUserInfo methods
+  - Updated fall alerts to use guaranteed delivery
+
+- `ios/Runner/AppDelegate.swift`:
+  - Added `didReceiveUserInfo` delegate method
+  - Added transfer deduplication logic
+  - Added cleanup for old transfer keys
+
+### Data Flow (Enhanced)
+```
+Apple Watch HealthManager
+    │
+    ├──► sendMessage() (real-time if reachable)
+    │         │
+    │         └──► On failure: bufferVitals() + transferUserInfo()
+    │
+    ├──► transferUserInfo() (guaranteed, queued)
+    │
+    └──► updateApplicationContext() (latest state)
+           │
+           ▼
+iPhone AppDelegate
+    │
+    ├──► didReceiveMessage (real-time)
+    ├──► didReceiveUserInfo (queued)  ← NEW
+    └──► didReceiveApplicationContext (background)
+           │
+           ▼
+Django API (/api/watch-vitals/dev/)
+```
+
+### Activity Data Payload
+```json
+{
+  "type": "watch_vitals",
+  "heart_rate": 72,
+  "blood_oxygen": 98,
+  "hrv": 42,
+  "respiratory_rate": 16,
+  "steps": 8432,
+  "calories": 420,
+  "distance_km": 5.2,
+  "floors_climbed": 12,
+  "exercise_minutes": 35,
+  "stand_minutes": 10
+}
+```
+
+---
+
+## 2026-01-02 - Report Dialog & Navigation Improvements
+
+### Changes
+1. **Dialog closes immediately on Generate click**
+   - Used `Builder` to get proper dialog context
+   - `Navigator.of(dialogContext).pop()` for instant dismissal
+   - `Future.microtask()` triggers generation after dialog animation
+
+2. **Progress overlay shows globally during navigation**
+   - Added `ReportProgressOverlay` to `bottom_navigation_screen.dart`
+   - Overlay persists while navigating between Home, Labs, Meds, Profile
+   - Removed duplicate overlay from `kindura_reports_screen.dart`
+
+3. **Works for all report types**
+   - Daily, Weekly, and Monthly reports all benefit from same improvements
+
+### Files Modified
+- `lib/screens/kindura_reports/kindura_reports_screen.dart` - Fixed dialog dismissal
+- `lib/screens/bottom_navigation/bottom_navigation_screen.dart` - Added global overlay
+
+---
+
+## 2026-01-02 - Report Generation Bug Fixes
+
+### Issues Fixed
+
+**1. `'WatchVitals' object has no attribute 'sleep_hours'` Error**
+- Report generation was failing due to stale Python bytecode cache
+- The code referenced `v.sleep_hours` instead of `v.total_sleep_hours`
+- **Fix**: Cleared `__pycache__` directories and `.pyc` files
+
+**2. Duplicate Key Violation on Report Regeneration**
+- When regenerating a report for the same date/type, the system threw:
+  `IntegrityError: duplicate key value violates unique constraint`
+- **Root Cause**: Code only checked for `status='processing'` reports, not completed/failed ones
+- **Fix**: Modified `generate_report_async()` in `users/views.py` to:
+  - Check for ANY existing report (not just processing)
+  - If completed/failed report exists, reset it and regenerate
+  - If processing report exists, return its current status
+
+### Files Modified
+- `KinduraAPIs-0.0.1/users/views.py` - Added proper duplicate handling
+
+### Test Results
+- Report generation now completes successfully (status: completed, progress: 100%)
+- Regenerating same report type/date works without errors
+
+---
+
+## 2026-01-02 - Sleep Data Fix: Prioritize Apple Watch/HealthKit
+
+### Issue
+Sleep hours showing ~13.5h instead of actual ~6h 52m from Apple Health.
+
+### Root Cause
+The app was summing sleep samples from ALL sources (Apple Watch, iPhone, third-party apps) without deduplication, causing double/triple counting of the same sleep period.
+
+### Fix
+Updated `AppDelegate.swift` to:
+
+1. **Prioritize Apple Watch/HealthKit data**
+   - Filter samples by source bundle identifier
+   - Prefer `com.apple.health`, `com.apple.nano` (watchOS), or device name containing "watch"
+   - Fall back to other sources only if no Watch data available
+
+2. **Deduplicate overlapping intervals**
+   - Added `deduplicateSleepSamples()` function
+   - Removes samples with overlapping time periods
+   - Keeps first sample when duplicates found
+
+### Files Changed
+- `ios/Runner/AppDelegate.swift`:
+  - `fetchLastNightSleep()` - Added source filtering and deduplication
+  - `fetchSleepHistory()` - Added same logic for history view
+  - `deduplicateSleepSamples()` - New helper function
+
+### Console Output (Debug)
+```
+😴 Found 24 total sleep samples from all sources
+😴 Using 12 Apple Watch/HealthKit samples (prioritized)
+😴 Ignoring 12 samples from other sources
+😴 After deduplication: 8 unique sleep intervals
+😴 Final sleep: 6.87 hours
+```
+
+---
+
+## 2026-01-02 - Agent Medication Update Permission Feature
+
+### Feature
+Added a user-controlled setting that allows the Kindura AI agent to mark medications as taken or missed via voice commands. When disabled, the agent directs users to update manually in the app.
+
+### How It Works
+1. User enables "Allow Medication Updates" in Settings > Kindura AI Permissions
+2. User tells agent: "I took my Metformin" or "I missed my morning medication"
+3. If enabled: Agent finds medication and calls dose-events API to record
+4. If disabled: Agent tells user to update manually in the Medications tab
+
+### Backend Changes
+
+**1. User Model** (`users/models.py`)
+- Added `allow_agent_medication_updates` BooleanField (default False)
+- Migration: `0019_add_agent_medication_permission.py`
+
+**2. UserProfileSerializer** (`users/serializers.py`)
+- Added `allow_agent_medication_updates` to fields
+- Included in extra_kwargs as optional
+
+### Flutter Changes
+
+**3. UserProfile Model** (`lib/models/user_profile/user_profile_model.dart`)
+- Added `allowAgentMedicationUpdates` field
+- Updated fromJson/toJson methods
+
+**4. ProfileController** (`lib/screens/profile/profile_controller.dart`)
+- Added `allowAgentMedicationUpdates` observable
+- Load value in onInit()
+- Include in saveProfile() API call
+
+**5. ProfileScreen Settings Dialog** (`lib/screens/profile/profile_screen.dart`)
+- Added "Kindura AI Permissions" section
+- Toggle switch for "Allow Medication Updates"
+- Info box explaining the feature
+
+**6. HomeController** (`lib/screens/home/home_controller.dart`)
+- Pass `allow_agent_medication_updates` to agent via LiveKit metadata
+
+### Agent Changes
+
+**7. Global Variables** (`kinduralivekit/agent.py`)
+- Added `_allow_agent_medication_updates` flag
+- Added `_medications_cache` for name lookup
+
+**8. Medication Functions** (`kinduralivekit/agent.py`)
+- `mark_medication_taken()` - Now checks permission, finds med by name, calls API
+- `mark_medication_missed()` - Now checks permission, records missed dose
+- `_find_medication_by_name()` - Helper for fuzzy medication name matching
+
+**9. Metadata Parsing** (`kinduralivekit/agent.py`)
+- Parse `allow_agent_medication_updates` from participant metadata
+- Log permission status on agent startup
+- Cache medications list for voice command lookups
+
+### Security
+- Feature is OFF by default
+- User must explicitly enable in Settings
+- Respects user's privacy and control preferences
+
+---
+
+## 2026-01-02 - Agent Contacts & Communication Feature
+
+### Feature
+Added ability for the AI agent to call contacts and send iMessages to contacts saved in the Kindura app (family, caregivers, doctors).
+
+### How It Works
+1. User tells agent: "Call my daughter" or "Send a message to Dr. Smith"
+2. Agent looks up the contact in Kindura's saved contacts
+3. Agent creates a "communication request" in the backend
+4. Flutter app polls for pending requests and shows confirmation dialog
+5. User confirms → App opens FaceTime/Phone/Messages with content ready
+6. User just taps to complete the action (iOS security requirement)
+
+### Backend Changes
+
+**1. CommunicationRequest Model** (`users/models.py`)
+- New model for storing agent-initiated communication requests
+- Request types: 'call', 'facetime_video', 'facetime_audio', 'message'
+- Status tracking: pending → approved → completed
+- 5-minute expiration for security
+
+**2. CommunicationRequestViewSet** (`users/views.py`)
+- `POST /api/communication-requests/` - Create request (called by agent)
+- `GET /api/communication-requests/` - Get pending requests (polled by app)
+- `POST /api/communication-requests/{id}/approve/` - User approved
+- `POST /api/communication-requests/{id}/reject/` - User declined
+- `POST /api/communication-requests/{id}/complete/` - Action executed
+
+### Agent Changes
+
+**3. ContactsAPI Updates** (`kinduralivekit/utils/contacts_api.py`)
+- `create_call_request()` - Request a call to a contact
+- `create_message_request()` - Request to send a message
+- `search_contact()` - Find contact by name
+
+**4. New Agent Tools** (`kinduralivekit/agent.py`)
+- `call_contact(contact_name, call_type)` - Call a contact via FaceTime/phone
+- `send_message_to_contact(contact_name, message)` - Send iMessage to contact
+- `get_kindura_contacts()` - List all saved contacts
+
+### iOS Native Changes
+
+**5. AppDelegate.swift** - Method channels for native communication
+- `com.kindura.ai/contacts` method channel
+- `sendMessage` - Open Messages app with content
+- `makeCall` - Open Phone app
+- `startFaceTimeCall` - Open FaceTime
+
+### Flutter Changes
+
+**6. ContactsCommunicationService** (`lib/services/contacts_communication_service.dart`)
+- Bridge to native iOS functionality
+- Methods: `sendMessage()`, `makePhoneCall()`, `startFaceTimeCall()`
+
+**7. URL Updates** (`lib/res/app_url/app_url.dart`)
+- Added communication request endpoints
+
+### Example User Flow
+```
+User: "Kindura, can you call my wife?"
+Agent: "I'm setting up a FaceTime video call to Mary. The app will ask you to confirm."
+[App shows confirmation dialog]
+User: [Taps Confirm]
+[FaceTime opens with Mary's number]
+```
+
+### Files Changed
+- `KinduraAPIs-0.0.1/users/models.py` - Added CommunicationRequest model
+- `KinduraAPIs-0.0.1/users/views.py` - Added CommunicationRequestViewSet
+- `KinduraAPIs-0.0.1/medical_app/urls.py` - Registered new viewset
+- `kinduralivekit-0.0.1/utils/contacts_api.py` - Added communication methods
+- `kinduralivekit-0.0.1/agent.py` - Added call_contact, send_message_to_contact tools
+- `ios/Runner/AppDelegate.swift` - Added Contacts framework & method channels
+- `lib/services/contacts_communication_service.dart` (NEW)
+- `lib/res/app_url/app_url.dart` - Added URLs
+
+### Migration
+```bash
+cd KinduraAPIs-0.0.1
+../.venv/bin/python manage.py migrate
+# Migration: 0018_add_device_contacts_and_communication_requests
+```
+
+---
+
+## 2026-01-02 - Background Report Generation with Progress Tracking
+
+### Problem
+Report generation blocked the UI - users had to wait on the reports screen while daily/weekly/monthly reports were generated, preventing navigation.
+
+### Solution: Seamless Background Generation
+Implemented background report generation with real-time progress tracking that allows users to navigate freely while reports generate.
+
+**Backend Changes:**
+
+**1. PatientReport Model** (`users/models.py`)
+- Added `status` field: 'pending', 'processing', 'completed', 'failed'
+- Added `progress` field: 0-100 integer for progress percentage
+- Added `error_message` field for failure details
+- Migration: `0017_add_report_progress_fields.py`
+
+**2. ReportService Progress Tracking** (`users/report_service.py`)
+- Modified to accept `report_instance` and update progress in DB
+- Progress stages: 5% (started) → 15% (observations) → 25% (medication) → 40% (vitals) → 55% (sleep) → 65% (falls) → 75% (biomarkers) → 85% (scores) → 90% (AI analysis) → 100% (complete)
+- Report instance updated with status='completed' when done
+
+**3. Async API Endpoints** (`users/views.py`)
+- `POST /api/users/patient_reports/generate_async/` - Starts background generation, returns immediately with report_id
+- `GET /api/users/patient_reports/{id}/status/` - Returns current status and progress
+- Uses Python threading for background execution
+- Proper Django DB connection management in threads
+
+**Flutter Changes:**
+
+**4. ReportGenerationService** (`lib/services/report_generation_service.dart` - NEW)
+- GetX service registered at app startup (persistent singleton)
+- Observable state: `isGenerating`, `progress`, `currentReportType`, `activeReportId`, `status`
+- Polls status endpoint every 2 seconds
+- Callbacks: `onReportCompleted`, `onReportFailed`
+- Shows snackbar notifications on completion/failure
+
+**5. ReportProgressOverlay** (`lib/common_widgets/report_progress_overlay.dart` - NEW)
+- Floating progress indicator widget
+- Shows at bottom of screen during navigation
+- Displays progress bar, percentage, and status text
+- Color changes: blue (generating) → green (complete) → red (failed)
+- Clickable to navigate to report when complete
+- Dismissible when done
+
+**6. KinduraReportsScreen Update** (`lib/screens/kindura_reports/kindura_reports_screen.dart`)
+- `_triggerReportGeneration()` now uses background service
+- No more blocking dialog - immediate response
+- Auto-refreshes when report completes (if still on reports screen)
+- Added `ReportProgressOverlay` to screen body
+
+**7. Service Registration** (`lib/main.dart`)
+- Added `ReportGenerationService` import
+- Registered as permanent singleton at startup
+
+### User Flow
+1. User taps "Generate Daily Report" → snackbar confirms generation started
+2. Floating progress pill appears at bottom: "Generating Daily Report... 10%"
+3. User can navigate anywhere - progress pill follows
+4. Progress updates: 25% → 45% → 70% → 85% → 100%
+5. On completion: Pill shows "Daily Report Ready!" with checkmark
+6. User taps pill → navigates to report OR dismiss after viewing
+
+### Files Modified
+- `KinduraAPIs-0.0.1/users/models.py` - Added status/progress/error_message fields
+- `KinduraAPIs-0.0.1/users/report_service.py` - Progress tracking at each stage
+- `KinduraAPIs-0.0.1/users/views.py` - Async generate and status endpoints
+- `lib/services/report_generation_service.dart` (NEW) - Background service
+- `lib/common_widgets/report_progress_overlay.dart` (NEW) - Floating overlay widget
+- `lib/screens/kindura_reports/kindura_reports_screen.dart` - Integrated with service
+- `lib/main.dart` - Registered ReportGenerationService
+- `lib/res/app_url/app_url.dart` - Added new endpoint URLs
 
 ---
 

@@ -19,7 +19,7 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from rest_framework.routers import DefaultRouter
-from users.views import UserViewSet, ContactViewSet
+from users.views import UserViewSet, ContactViewSet, DeviceContactViewSet, CommunicationRequestViewSet
 from health_profile.views import HealthProfileViewSet, WatchVitalsView, WatchVitalsHistoryView, WatchVitalsDevView
 from courses.views import CourseViewSet
 from medicines.views import MedicineViewSet
@@ -65,6 +65,8 @@ router.register(r'medicines', MedicineViewSet, basename='medicines')  # Keep old
 router.register(r'schedules', CourseMedicineScheduleViewSet, basename='schedule')
 router.register(r'tracking', CourseDayTrackingViewSet, basename='tracking')
 router.register(r'contacts', ContactViewSet, basename='contact')
+router.register(r'device-contacts', DeviceContactViewSet, basename='device-contact')
+router.register(r'communication-requests', CommunicationRequestViewSet, basename='communication-request')
 
 # Medical reports endpoints (legacy)
 router.register(r'medical-reports', MedicalReportViewSet, basename='medical-report')

@@ -13,6 +13,7 @@ import 'package:kindura_ai/screens/meds_vitamin/meds_vitamin_screen.dart';
 import 'package:kindura_ai/screens/profile/profile_screen.dart';
 import 'package:kindura_ai/screens/scan/scan_screen.dart';
 import 'package:kindura_ai/services/theme_service.dart';
+import 'package:kindura_ai/common_widgets/report_progress_overlay.dart';
 
 class MainPage extends StatelessWidget {
   final BottomNavController controller = Get.put(BottomNavController());
@@ -63,7 +64,13 @@ class MainPage extends StatelessWidget {
         }
       },
       child: Scaffold(
-        body: Obx(() => screens[controller.currentIndex.value]),
+        body: Stack(
+          children: [
+            Obx(() => screens[controller.currentIndex.value]),
+            // Global report progress overlay - shows on all screens
+            const ReportProgressOverlay(),
+          ],
+        ),
         bottomNavigationBar: Container(
           padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom > 0 ? 8.h : 12.h),
           decoration: BoxDecoration(

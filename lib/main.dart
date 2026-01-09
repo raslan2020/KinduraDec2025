@@ -30,6 +30,7 @@ import 'package:kindura_ai/screens/splash_screen/splash_screen.dart';
 import 'package:kindura_ai/services/notification_service.dart';
 import 'package:kindura_ai/services/voice_service.dart';
 import 'package:kindura_ai/services/theme_service.dart';
+import 'package:kindura_ai/services/report_generation_service.dart';
 import 'package:kindura_ai/utils/file_logger.dart';
 
 /// Application entry point.
@@ -87,6 +88,13 @@ void main() async {
     Get.put(VoiceService(), permanent: true);
   } catch (e) {
     print('VoiceService initialization failed: $e');
+  }
+
+  // ReportGenerationService: Manages background report generation with progress tracking
+  try {
+    Get.put(ReportGenerationService(), permanent: true);
+  } catch (e) {
+    print('ReportGenerationService initialization failed: $e');
   }
 
   // NOTE: HomeController is NOT registered here.

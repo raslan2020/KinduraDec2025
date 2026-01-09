@@ -33,6 +33,7 @@ class Result {
   bool? termsAndConditions;
   String? unitSystem; // 'US' or 'SI'
   String? unitSystemDisplay; // Human-readable display label
+  bool? allowAgentMedicationUpdates; // Allow Kindura AI to mark medications
 
   Result(
       {this.firstName,
@@ -46,7 +47,8 @@ class Result {
       this.agentConservationChoice,
       this.termsAndConditions,
       this.unitSystem,
-      this.unitSystemDisplay});
+      this.unitSystemDisplay,
+      this.allowAgentMedicationUpdates});
 
   Result.fromJson(Map<String, dynamic> json) {
     firstName = json['first_name'];
@@ -61,6 +63,7 @@ class Result {
     termsAndConditions = json['terms_and_conditions'];
     unitSystem = json['unit_system'] ?? 'US';
     unitSystemDisplay = json['unit_system_display'];
+    allowAgentMedicationUpdates = json['allow_agent_medication_updates'] ?? false;
   }
 
   Map<String, dynamic> toJson() {
@@ -76,6 +79,7 @@ class Result {
     data['agent_conservation_choice'] = this.agentConservationChoice;
     data['terms_and_conditions'] = this.termsAndConditions;
     data['unit_system'] = this.unitSystem;
+    data['allow_agent_medication_updates'] = this.allowAgentMedicationUpdates;
     return data;
   }
 }

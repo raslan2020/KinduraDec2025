@@ -1235,6 +1235,8 @@ class HomeController extends GetxController {
       courseDetails['language'] = userProfile.value.result?.language;
       courseDetails['agent_conversation_choice'] =
           userProfile.value.result?.agentConservationChoice;
+      courseDetails['allow_agent_medication_updates'] =
+          userProfile.value.result?.allowAgentMedicationUpdates ?? false;
       var data = {
         "identity": userProfile.value.result?.email,
         "room": "room_${userProfile.value.result?.email}",

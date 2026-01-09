@@ -5,6 +5,175 @@
 	<key>logFormatVersion</key>
 	<integer>12</integer>
 	<key>logs</key>
-	<dict/>
+	<dict>
+		<key>94BF9331-2923-43C7-B520-429668BD43E2</key>
+		<dict>
+			<key>className</key>
+			<string>IDECommandLineBuildLog</string>
+			<key>documentTypeString</key>
+			<string>&lt;nil&gt;</string>
+			<key>domainType</key>
+			<string>Xcode.IDEActivityLogDomainType.BuildLog</string>
+			<key>fileName</key>
+			<string>94BF9331-2923-43C7-B520-429668BD43E2.xcactivitylog</string>
+			<key>hasPrimaryLog</key>
+			<true/>
+			<key>primaryObservable</key>
+			<dict>
+				<key>highLevelStatus</key>
+				<string>S</string>
+				<key>totalNumberOfAnalyzerIssues</key>
+				<integer>0</integer>
+				<key>totalNumberOfErrors</key>
+				<integer>0</integer>
+				<key>totalNumberOfTestFailures</key>
+				<integer>0</integer>
+				<key>totalNumberOfWarnings</key>
+				<integer>0</integer>
+			</dict>
+			<key>schemeIdentifier-containerName</key>
+			<string>KinduraWatch project</string>
+			<key>schemeIdentifier-schemeName</key>
+			<string>KinduraWatch</string>
+			<key>schemeIdentifier-sharedScheme</key>
+			<integer>1</integer>
+			<key>signature</key>
+			<string>Cleaning project KinduraWatch with scheme KinduraWatch and configuration Debug</string>
+			<key>timeStartedRecording</key>
+			<real>789651397.92633903</real>
+			<key>timeStoppedRecording</key>
+			<real>789651398.52888596</real>
+			<key>title</key>
+			<string>Cleaning project KinduraWatch with scheme KinduraWatch and configuration Debug</string>
+			<key>uniqueIdentifier</key>
+			<string>94BF9331-2923-43C7-B520-429668BD43E2</string>
+		</dict>
+		<key>A259495E-7B0A-4079-82B5-CA124530E389</key>
+		<dict>
+			<key>className</key>
+			<string>IDECommandLineBuildLog</string>
+			<key>documentTypeString</key>
+			<string>&lt;nil&gt;</string>
+			<key>domainType</key>
+			<string>Xcode.IDEActivityLogDomainType.BuildLog</string>
+			<key>fileName</key>
+			<string>A259495E-7B0A-4079-82B5-CA124530E389.xcactivitylog</string>
+			<key>hasPrimaryLog</key>
+			<true/>
+			<key>primaryObservable</key>
+			<dict>
+				<key>highLevelStatus</key>
+				<string>W</string>
+				<key>totalNumberOfAnalyzerIssues</key>
+				<integer>0</integer>
+				<key>totalNumberOfErrors</key>
+				<integer>0</integer>
+				<key>totalNumberOfTestFailures</key>
+				<integer>0</integer>
+				<key>totalNumberOfWarnings</key>
+				<integer>1</integer>
+			</dict>
+			<key>schemeIdentifier-containerName</key>
+			<string>KinduraWatch project</string>
+			<key>schemeIdentifier-schemeName</key>
+			<string>KinduraWatch</string>
+			<key>schemeIdentifier-sharedScheme</key>
+			<integer>1</integer>
+			<key>signature</key>
+			<string>Building project KinduraWatch with scheme KinduraWatch and configuration Debug</string>
+			<key>timeStartedRecording</key>
+			<real>789650857.60956001</real>
+			<key>timeStoppedRecording</key>
+			<real>789650870.17835402</real>
+			<key>title</key>
+			<string>Building project KinduraWatch with scheme KinduraWatch and configuration Debug</string>
+			<key>uniqueIdentifier</key>
+			<string>A259495E-7B0A-4079-82B5-CA124530E389</string>
+		</dict>
+		<key>C44C2B7F-3DA2-4AB4-B595-6B4A8BDE84FA</key>
+		<dict>
+			<key>className</key>
+			<string>IDECommandLineBuildLog</string>
+			<key>documentTypeString</key>
+			<string>&lt;nil&gt;</string>
+			<key>domainType</key>
+			<string>Xcode.IDEActivityLogDomainType.BuildLog</string>
+			<key>fileName</key>
+			<string>C44C2B7F-3DA2-4AB4-B595-6B4A8BDE84FA.xcactivitylog</string>
+			<key>hasPrimaryLog</key>
+			<true/>
+			<key>primaryObservable</key>
+			<dict>
+				<key>highLevelStatus</key>
+				<string>S</string>
+				<key>totalNumberOfAnalyzerIssues</key>
+				<integer>0</integer>
+				<key>totalNumberOfErrors</key>
+				<integer>0</integer>
+				<key>totalNumberOfTestFailures</key>
+				<integer>0</integer>
+				<key>totalNumberOfWarnings</key>
+				<integer>0</integer>
+			</dict>
+			<key>schemeIdentifier-containerName</key>
+			<string>KinduraWatch project</string>
+			<key>schemeIdentifier-schemeName</key>
+			<string>KinduraWatch</string>
+			<key>schemeIdentifier-sharedScheme</key>
+			<integer>1</integer>
+			<key>signature</key>
+			<string>Cleaning project KinduraWatch with scheme KinduraWatch and configuration Debug</string>
+			<key>timeStartedRecording</key>
+			<real>789650857.09380996</real>
+			<key>timeStoppedRecording</key>
+			<real>789650857.59980595</real>
+			<key>title</key>
+			<string>Cleaning project KinduraWatch with scheme KinduraWatch and configuration Debug</string>
+			<key>uniqueIdentifier</key>
+			<string>C44C2B7F-3DA2-4AB4-B595-6B4A8BDE84FA</string>
+		</dict>
+		<key>E5C77866-EB17-4ADD-9041-BC50EB50B1B7</key>
+		<dict>
+			<key>className</key>
+			<string>IDECommandLineBuildLog</string>
+			<key>documentTypeString</key>
+			<string>&lt;nil&gt;</string>
+			<key>domainType</key>
+			<string>Xcode.IDEActivityLogDomainType.BuildLog</string>
+			<key>fileName</key>
+			<string>E5C77866-EB17-4ADD-9041-BC50EB50B1B7.xcactivitylog</string>
+			<key>hasPrimaryLog</key>
+			<true/>
+			<key>primaryObservable</key>
+			<dict>
+				<key>highLevelStatus</key>
+				<string>W</string>
+				<key>totalNumberOfAnalyzerIssues</key>
+				<integer>0</integer>
+				<key>totalNumberOfErrors</key>
+				<integer>0</integer>
+				<key>totalNumberOfTestFailures</key>
+				<integer>0</integer>
+				<key>totalNumberOfWarnings</key>
+				<integer>1</integer>
+			</dict>
+			<key>schemeIdentifier-containerName</key>
+			<string>KinduraWatch project</string>
+			<key>schemeIdentifier-schemeName</key>
+			<string>KinduraWatch</string>
+			<key>schemeIdentifier-sharedScheme</key>
+			<integer>1</integer>
+			<key>signature</key>
+			<string>Building project KinduraWatch with scheme KinduraWatch and configuration Debug</string>
+			<key>timeStartedRecording</key>
+			<real>789651398.543751</real>
+			<key>timeStoppedRecording</key>
+			<real>789651411.94193697</real>
+			<key>title</key>
+			<string>Building project KinduraWatch with scheme KinduraWatch and configuration Debug</string>
+			<key>uniqueIdentifier</key>
+			<string>E5C77866-EB17-4ADD-9041-BC50EB50B1B7</string>
+		</dict>
+	</dict>
 </dict>
 </plist>

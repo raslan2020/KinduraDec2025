@@ -35,10 +35,56 @@ struct FallEvent {
     }
 }
 
+// MARK: - Medication Reminder Model
+struct MedicationReminder: Identifiable {
+    let id: String
+    let medicationId: String
+    let medicationName: String
+    let dosage: String
+    let form: String
+    let scheduledTime: Date
+    let instructions: String
+    let isFollowUp: Bool
+    let followUpNumber: Int
+    let requiresEscalation: Bool
+
+    init(from message: [String: Any]) {
+        self.id = message["reminder_id"] as? String ?? UUID().uuidString
+        self.medicationId = message["medication_id"] as? String ?? ""
+        self.medicationName = message["medication_name"] as? String ?? "Medication"
+        self.dosage = message["dosage"] as? String ?? ""
+        self.form = message["form"] as? String ?? ""
+
+        if let timeStr = message["scheduled_time"] as? String {
+            self.scheduledTime = ISO8601DateFormatter().date(from: timeStr) ?? Date()
+        } else {
+            self.scheduledTime = Date()
+        }
+
+        self.instructions = message["instructions"] as? String ?? ""
+        self.isFollowUp = message["is_follow_up"] as? Bool ?? false
+        self.followUpNumber = message["follow_up_number"] as? Int ?? 0
+        self.requiresEscalation = message["requires_escalation"] as? Bool ?? false
+    }
+
+    var timeString: String {
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        return formatter.string(from: scheduledTime)
+    }
+}
+
 // MARK: - Health Manager
 class HealthManager: NSObject, ObservableObject, WCSessionDelegate, HKWorkoutSessionDelegate, HKLiveWorkoutBuilderDelegate {
     private let healthStore = HKHealthStore()
     private var wcSession: WCSession?
+
+    // DEBUG MODE - Set to true for verbose logging
+    private let DEBUG_MODE = true
+
+    // WCSession reachability check timer
+    private var reachabilityCheckTimer: Timer?
+    private let reachabilityCheckInterval: TimeInterval = 30 // Check every 30 seconds
 
     // Vitals
     @Published var heartRate: Double = 0
@@ -52,11 +98,24 @@ class HealthManager: NSObject, ObservableObject, WCSessionDelegate, HKWorkoutSes
     @Published var isSleepMonitoringActive: Bool = false
     @Published var awakeningsCount: Int = 0
 
+    // Activity Data
+    @Published var steps: Int = 0
+    @Published var calories: Double = 0
+    @Published var distanceKm: Double = 0
+    @Published var floorsClimbed: Int = 0
+    @Published var exerciseMinutes: Int = 0
+    @Published var standMinutes: Int = 0
+
     // Fall Detection
     @Published var isFallDetectionEnabled: Bool = true
     @Published var recentFalls: [FallEvent] = []
     @Published var fallDetectionStatus: String = "Monitoring..."
     @Published var lastImpactG: Double = 0
+
+    // Medication Reminders
+    @Published var currentMedicationReminder: MedicationReminder?
+    @Published var showMedicationReminderAlert: Bool = false
+    @Published var pendingMedicationReminders: [MedicationReminder] = []
 
     // CoreMotion for real-time fall detection
     private let motionManager = CMMotionManager()
@@ -66,9 +125,13 @@ class HealthManager: NSObject, ObservableObject, WCSessionDelegate, HKWorkoutSes
     private var freeFallStartTime: Date?
 
     // Fall detection thresholds
+    // TESTING MODE: Lower thresholds for easier testing (set to higher values for production)
     private let freeFallThreshold: Double = 0.3      // Below 0.3G indicates free fall
-    private let impactThreshold: Double = 3.0        // Above 3G indicates hard impact
+    private let impactThreshold: Double = 3.0        // Above 3G indicates hard impact (after free-fall)
+    private let impactOnlyThreshold: Double = 6.0    // Above 6G for impact-only detection (fast arm movements)
+    private let minFreeFallDuration: TimeInterval = 0.08  // Minimum 80ms free-fall (shorter for testing)
     private let fallConfirmationWindow: TimeInterval = 2.0  // Time window to confirm fall
+    // NOTE: For production, use: impactThreshold=4.0, impactOnlyThreshold=10.0, minFreeFallDuration=0.15
 
     // Authorization & Monitoring State
     @Published var isHealthKitAuthorized: Bool = false
@@ -94,6 +157,7 @@ class HealthManager: NSObject, ObservableObject, WCSessionDelegate, HKWorkoutSes
     override init() {
         super.init()
         setupWatchConnectivity()
+        loadPendingVitals()  // Load any buffered vitals from previous session
     }
 
     // MARK: - WatchConnectivity Setup
@@ -120,17 +184,75 @@ class HealthManager: NSObject, ObservableObject, WCSessionDelegate, HKWorkoutSes
             switch activationState {
             case .activated:
                 print("[HealthManager] WCSession activated successfully")
+
+                // Load any pending data from persistent storage
+                self.loadPendingVitals()
+                self.loadPendingFallAlerts()
+
+                // Send any buffered CRITICAL fall alerts first
+                self.sendBufferedFallAlerts()
+
+                // Send any buffered vitals
+                self.sendBufferedVitals()
+
                 // Request configuration from iPhone if not already configured
                 if !ConfigurationManager.shared.isConfigured {
                     self.requestConfigurationFromiPhone()
                 }
+
+                // Start reachability check timer
+                self.startReachabilityCheckTimer()
             case .inactive:
                 print("[HealthManager] WCSession inactive")
+                self.stopReachabilityCheckTimer()
             case .notActivated:
                 print("[HealthManager] WCSession not activated")
+                self.stopReachabilityCheckTimer()
             @unknown default:
                 break
             }
+        }
+    }
+
+    // MARK: - WCSession Reachability Check Timer
+
+    private func startReachabilityCheckTimer() {
+        // Stop any existing timer
+        stopReachabilityCheckTimer()
+
+        // Start a new timer on the main run loop
+        DispatchQueue.main.async {
+            self.reachabilityCheckTimer = Timer.scheduledTimer(withTimeInterval: self.reachabilityCheckInterval, repeats: true) { [weak self] _ in
+                self?.checkReachabilityAndSync()
+            }
+            print("[HealthManager] ⏰ Started reachability check timer (every \(self.reachabilityCheckInterval)s)")
+        }
+    }
+
+    private func stopReachabilityCheckTimer() {
+        reachabilityCheckTimer?.invalidate()
+        reachabilityCheckTimer = nil
+    }
+
+    private func checkReachabilityAndSync() {
+        guard let session = wcSession, session.activationState == .activated else {
+            print("[HealthManager] ⏰ Reachability check: Session not activated")
+            return
+        }
+
+        let hasPendingData = !pendingVitals.isEmpty || !pendingFallAlerts.isEmpty
+
+        if session.isReachable {
+            print("[HealthManager] ⏰ Reachability check: iPhone reachable")
+
+            // Send any pending data
+            if hasPendingData {
+                print("[HealthManager] ⏰ Sending \(pendingFallAlerts.count) pending falls, \(pendingVitals.count) pending vitals")
+                sendBufferedFallAlerts()
+                sendBufferedVitals()
+            }
+        } else {
+            print("[HealthManager] ⏰ Reachability check: iPhone NOT reachable (pending: \(pendingVitals.count) vitals, \(pendingFallAlerts.count) falls)")
         }
     }
 
@@ -165,6 +287,14 @@ class HealthManager: NSObject, ObservableObject, WCSessionDelegate, HKWorkoutSes
                 self.syncPendingVitals()
 
                 replyHandler(["status": "config_received"])
+                return
+            }
+
+            // Handle vitals request from iPhone
+            if message["type"] as? String == "request_vitals" {
+                print("[HealthManager] 📲 iPhone requested current vitals")
+                let vitals = self.createVitalsPayload()
+                replyHandler(vitals)
                 return
             }
 
@@ -210,12 +340,144 @@ class HealthManager: NSObject, ObservableObject, WCSessionDelegate, HKWorkoutSes
                 }
             }
 
+            // Handle medication reminder from iPhone
+            if message["type"] as? String == "medication_reminder" {
+                print("[HealthManager] 💊 Received medication reminder from iPhone")
+                self.handleMedicationReminder(message: message, replyHandler: replyHandler)
+                return
+            }
+
             replyHandler(["status": "received"])
         }
     }
 
     // Note: sessionDidBecomeInactive and sessionDidDeactivate are iOS-only
     // On watchOS, only session(_:activationDidCompleteWith:error:) is required
+
+    // MARK: - Medication Reminder Handling
+
+    /// Handle incoming medication reminder from iPhone
+    private func handleMedicationReminder(message: [String: Any], replyHandler: @escaping ([String: Any]) -> Void) {
+        let reminder = MedicationReminder(from: message)
+
+        print("[HealthManager] 💊 Medication: \(reminder.medicationName) (\(reminder.dosage))")
+        print("[HealthManager] 💊 Scheduled: \(reminder.timeString), Follow-up: \(reminder.isFollowUp)")
+
+        DispatchQueue.main.async {
+            // Add to pending queue if already showing a reminder
+            if self.showMedicationReminderAlert {
+                self.pendingMedicationReminders.append(reminder)
+                print("[HealthManager] 💊 Queued reminder (already showing one)")
+            } else {
+                // Show immediately
+                self.currentMedicationReminder = reminder
+                self.showMedicationReminderAlert = true
+            }
+
+            // Play haptic notification
+            WKInterfaceDevice.current().play(.notification)
+
+            // Play more urgent haptic for follow-ups
+            if reminder.isFollowUp && reminder.followUpNumber >= 2 {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    WKInterfaceDevice.current().play(.retry)
+                }
+            }
+        }
+
+        replyHandler(["status": "reminder_displayed", "reminder_id": reminder.id])
+    }
+
+    /// Send medication reminder response to iPhone
+    /// action: "taken", "skipped", "snoozed"
+    func sendMedicationReminderResponse(
+        reminderId: String,
+        medicationId: String,
+        action: String,
+        scheduledTime: Date,
+        takenAt: Date? = nil
+    ) {
+        guard let session = wcSession, session.activationState == .activated else {
+            print("[HealthManager] 💊 Cannot send response - session not activated")
+            bufferMedicationResponse(reminderId: reminderId, medicationId: medicationId, action: action, scheduledTime: scheduledTime, takenAt: takenAt)
+            return
+        }
+
+        var response: [String: Any] = [
+            "type": "medication_reminder_response",
+            "reminder_id": reminderId,
+            "medication_id": medicationId,
+            "action": action,
+            "scheduled_time": ISO8601DateFormatter().string(from: scheduledTime),
+            "timestamp": ISO8601DateFormatter().string(from: Date()),
+            "source": "apple_watch"
+        ]
+
+        if let takenAt = takenAt {
+            response["taken_at"] = ISO8601DateFormatter().string(from: takenAt)
+        }
+
+        print("[HealthManager] 💊 Sending medication response: \(action) for \(medicationId)")
+
+        if session.isReachable {
+            session.sendMessage(response, replyHandler: { reply in
+                print("[HealthManager] 💊 ✅ iPhone received medication response: \(reply)")
+                DispatchQueue.main.async {
+                    self.dismissCurrentReminder()
+                }
+            }, errorHandler: { error in
+                print("[HealthManager] 💊 ⚠️ Failed to send response: \(error.localizedDescription)")
+                // Queue for later delivery
+                self.bufferMedicationResponse(reminderId: reminderId, medicationId: medicationId, action: action, scheduledTime: scheduledTime, takenAt: takenAt)
+                DispatchQueue.main.async {
+                    self.dismissCurrentReminder()
+                }
+            })
+        } else {
+            print("[HealthManager] 💊 iPhone not reachable - buffering response")
+            bufferMedicationResponse(reminderId: reminderId, medicationId: medicationId, action: action, scheduledTime: scheduledTime, takenAt: takenAt)
+            dismissCurrentReminder()
+        }
+    }
+
+    /// Buffer medication response for later delivery
+    private func bufferMedicationResponse(reminderId: String, medicationId: String, action: String, scheduledTime: Date, takenAt: Date?) {
+        var response: [String: Any] = [
+            "type": "medication_reminder_response",
+            "reminder_id": reminderId,
+            "medication_id": medicationId,
+            "action": action,
+            "scheduled_time": ISO8601DateFormatter().string(from: scheduledTime),
+            "timestamp": ISO8601DateFormatter().string(from: Date()),
+            "source": "apple_watch",
+            "transfer_id": UUID().uuidString
+        ]
+
+        if let takenAt = takenAt {
+            response["taken_at"] = ISO8601DateFormatter().string(from: takenAt)
+        }
+
+        wcSession?.transferUserInfo(response)
+        print("[HealthManager] 💊 Medication response queued via transferUserInfo")
+    }
+
+    /// Dismiss current reminder and show next queued one
+    private func dismissCurrentReminder() {
+        DispatchQueue.main.async {
+            self.showMedicationReminderAlert = false
+            self.currentMedicationReminder = nil
+
+            // Show next queued reminder if any
+            if !self.pendingMedicationReminders.isEmpty {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    let nextReminder = self.pendingMedicationReminders.removeFirst()
+                    self.currentMedicationReminder = nextReminder
+                    self.showMedicationReminderAlert = true
+                    WKInterfaceDevice.current().play(.notification)
+                }
+            }
+        }
+    }
 
     // MARK: - Request Configuration from iPhone
     func requestConfigurationFromiPhone() {
@@ -253,30 +515,49 @@ class HealthManager: NSObject, ObservableObject, WCSessionDelegate, HKWorkoutSes
     // MARK: - Pending Vitals Buffer (for when iPhone is unreachable)
     private var pendingVitals: [[String: Any]] = []
     private let maxPendingVitals = 100  // Limit to prevent memory issues
+    private let pendingVitalsKey = "com.kindura.pendingVitals"  // UserDefaults key
+
+    // MARK: - Pending Fall Alerts Buffer (CRITICAL - must never lose fall alerts)
+    private var pendingFallAlerts: [[String: Any]] = []
+    private let maxPendingFallAlerts = 50  // Keep all recent falls
+    private let pendingFallAlertsKey = "com.kindura.pendingFallAlerts"
 
     // MARK: - Send Vitals to iPhone (via WatchConnectivity ONLY)
     func sendVitalsToiPhone() {
         let vitalsData = createVitalsPayload()
 
+        // Debug: Print vital values summary
+        if DEBUG_MODE {
+            print("[HealthManager] 📊 DEBUG Vitals Summary:")
+            print("  HR: \(Int(heartRate)) BPM | O2: \(Int(bloodOxygen))% | HRV: \(Int(hrv)) ms | RR: \(Int(respiratoryRate)) br/m")
+            print("  Steps: \(steps) | Cal: \(Int(calories)) | Dist: \(String(format: "%.1f", distanceKm)) km | Floors: \(floorsClimbed)")
+            print("  Exercise: \(exerciseMinutes) min | Stand: \(standMinutes) min | Sleep: \(String(format: "%.1f", totalSleepHours)) h")
+            print("  Pending Buffer: \(pendingVitals.count) | Outstanding Transfers: \(outstandingTransfers.count)")
+        }
+
         guard let session = wcSession, session.activationState == .activated else {
-            print("[HealthManager] WCSession not activated - buffering vitals")
+            print("[HealthManager] ⚠️ WCSession not activated - buffering vitals")
+            if DEBUG_MODE { print("[HealthManager] 📊 Session state: \(wcSession?.activationState.rawValue ?? -1)") }
             bufferVitals(vitalsData)
             return
         }
 
         guard session.isReachable else {
-            print("[HealthManager] iPhone not reachable - buffering vitals")
+            print("[HealthManager] 📵 iPhone not reachable - buffering vitals")
+            if DEBUG_MODE { print("[HealthManager] 📊 Will use transferUserInfo for guaranteed delivery") }
             bufferVitals(vitalsData)
             return
         }
 
         // Send current vitals to iPhone
+        if DEBUG_MODE { print("[HealthManager] 📤 Sending vitals via sendMessage (real-time)...") }
         session.sendMessage(vitalsData, replyHandler: { [weak self] response in
-            print("[HealthManager] ✅ Vitals sent to iPhone: \(response)")
+            print("[HealthManager] ✅ Vitals sent to iPhone: \(response["status"] ?? "ok")")
             // After successful send, try to send any buffered vitals
             self?.sendBufferedVitals()
         }, errorHandler: { [weak self] error in
             print("[HealthManager] ❌ Failed to send to iPhone: \(error.localizedDescription)")
+            if self?.DEBUG_MODE == true { print("[HealthManager] 📊 Falling back to buffer + transferUserInfo") }
             self?.bufferVitals(vitalsData)
         })
     }
@@ -292,7 +573,45 @@ class HealthManager: NSObject, ObservableObject, WCSessionDelegate, HKWorkoutSes
             print("[HealthManager] ⚠️ Trimmed pending vitals to \(maxPendingVitals)")
         }
 
+        // Persist to UserDefaults
+        savePendingVitals()
+
+        // Also queue via transferUserInfo for guaranteed delivery
+        sendVitalsViaTransferUserInfo(vitals)
+
         print("[HealthManager] Buffered vitals (total pending: \(pendingVitals.count))")
+    }
+
+    // MARK: - Persistent Buffer Storage
+    private func savePendingVitals() {
+        do {
+            let data = try JSONSerialization.data(withJSONObject: pendingVitals, options: [])
+            UserDefaults.standard.set(data, forKey: pendingVitalsKey)
+            print("[HealthManager] 💾 Saved \(pendingVitals.count) pending vitals to storage")
+        } catch {
+            print("[HealthManager] ❌ Failed to save pending vitals: \(error)")
+        }
+    }
+
+    private func loadPendingVitals() {
+        guard let data = UserDefaults.standard.data(forKey: pendingVitalsKey) else {
+            print("[HealthManager] No pending vitals in storage")
+            return
+        }
+
+        do {
+            if let vitals = try JSONSerialization.jsonObject(with: data, options: []) as? [[String: Any]] {
+                pendingVitals = vitals
+                print("[HealthManager] 📂 Loaded \(pendingVitals.count) pending vitals from storage")
+            }
+        } catch {
+            print("[HealthManager] ❌ Failed to load pending vitals: \(error)")
+        }
+    }
+
+    private func clearPendingVitalsStorage() {
+        UserDefaults.standard.removeObject(forKey: pendingVitalsKey)
+        print("[HealthManager] 🗑️ Cleared pending vitals storage")
     }
 
     private func sendBufferedVitals() {
@@ -308,18 +627,115 @@ class HealthManager: NSObject, ObservableObject, WCSessionDelegate, HKWorkoutSes
         let vitalsToSend = pendingVitals
         pendingVitals.removeAll()
 
+        // Track success/failure for storage cleanup
+        let dispatchGroup = DispatchGroup()
+        var failedVitals: [[String: Any]] = []
+        let failedVitalsLock = NSLock()
+
         for vitals in vitalsToSend {
+            dispatchGroup.enter()
             session.sendMessage(vitals, replyHandler: { response in
                 print("[HealthManager] ✅ Buffered vital sent: \(response)")
-            }, errorHandler: { [weak self] error in
+                dispatchGroup.leave()
+            }, errorHandler: { error in
                 print("[HealthManager] ❌ Failed to send buffered vital: \(error)")
-                // Re-buffer on failure
-                self?.pendingVitals.append(vitals)
+                // Track failed vitals for re-buffering
+                failedVitalsLock.lock()
+                failedVitals.append(vitals)
+                failedVitalsLock.unlock()
+                dispatchGroup.leave()
             })
 
             // Small delay between sends to avoid overwhelming
             Thread.sleep(forTimeInterval: 0.1)
         }
+
+        // Handle completion - update storage based on results
+        dispatchGroup.notify(queue: .main) { [weak self] in
+            if failedVitals.isEmpty {
+                // All sends succeeded - clear persistent storage
+                self?.clearPendingVitalsStorage()
+                print("[HealthManager] ✅ All buffered vitals sent, storage cleared")
+            } else {
+                // Some failed - re-buffer and save to storage
+                self?.pendingVitals = failedVitals
+                self?.savePendingVitals()
+                print("[HealthManager] ⚠️ \(failedVitals.count) vitals re-buffered and saved")
+            }
+        }
+    }
+
+    // MARK: - Fall Alert Buffer Management (CRITICAL)
+    private func bufferFallAlert(_ fallData: [String: Any]) {
+        pendingFallAlerts.append(fallData)
+
+        // Trim old entries if over limit (keep most recent)
+        if pendingFallAlerts.count > maxPendingFallAlerts {
+            pendingFallAlerts.removeFirst(pendingFallAlerts.count - maxPendingFallAlerts)
+        }
+
+        // Persist to storage - fall alerts are critical
+        savePendingFallAlerts()
+        print("[HealthManager] 🚨 Buffered fall alert (total pending: \(pendingFallAlerts.count))")
+    }
+
+    private func savePendingFallAlerts() {
+        do {
+            let data = try JSONSerialization.data(withJSONObject: pendingFallAlerts, options: [])
+            UserDefaults.standard.set(data, forKey: pendingFallAlertsKey)
+            print("[HealthManager] 💾 Saved \(pendingFallAlerts.count) pending fall alerts to storage")
+        } catch {
+            print("[HealthManager] ❌ Failed to save pending fall alerts: \(error)")
+        }
+    }
+
+    private func loadPendingFallAlerts() {
+        guard let data = UserDefaults.standard.data(forKey: pendingFallAlertsKey) else {
+            print("[HealthManager] No pending fall alerts in storage")
+            return
+        }
+
+        do {
+            if let alerts = try JSONSerialization.jsonObject(with: data, options: []) as? [[String: Any]] {
+                pendingFallAlerts = alerts
+                print("[HealthManager] 📂 Loaded \(pendingFallAlerts.count) pending fall alerts from storage")
+            }
+        } catch {
+            print("[HealthManager] ❌ Failed to load pending fall alerts: \(error)")
+        }
+    }
+
+    private func clearPendingFallAlertsStorage() {
+        UserDefaults.standard.removeObject(forKey: pendingFallAlertsKey)
+        print("[HealthManager] 🗑️ Cleared pending fall alerts storage")
+    }
+
+    private func sendBufferedFallAlerts() {
+        guard !pendingFallAlerts.isEmpty else { return }
+        guard let session = wcSession, session.activationState == .activated else {
+            print("[HealthManager] Cannot send buffered fall alerts - session not activated")
+            return
+        }
+
+        print("[HealthManager] 🚨📤 Sending \(pendingFallAlerts.count) buffered fall alerts")
+
+        let alertsToSend = pendingFallAlerts
+        pendingFallAlerts.removeAll()
+
+        for alert in alertsToSend {
+            var transferData = alert
+            transferData["transfer_id"] = UUID().uuidString
+            transferData["transfer_timestamp"] = Date().timeIntervalSince1970
+            transferData["priority"] = "high"
+            transferData["was_buffered"] = true
+
+            let transfer = session.transferUserInfo(transferData)
+            outstandingTransfers.append(transfer)
+            print("[HealthManager] 🚨📬 Sent buffered fall alert via transferUserInfo")
+        }
+
+        clearPendingFallAlertsStorage()
+        cleanupCompletedTransfers()
     }
 
     // MARK: - Send via Application Context (fallback for background)
@@ -336,6 +752,61 @@ class HealthManager: NSObject, ObservableObject, WCSessionDelegate, HKWorkoutSes
         }
     }
 
+    // MARK: - Guaranteed Delivery via transferUserInfo
+    /// Use transferUserInfo for guaranteed delivery of important data
+    /// Data is queued and delivered when iPhone becomes available
+    private func sendVitalsViaTransferUserInfo(_ vitals: [String: Any]? = nil) {
+        guard let session = wcSession, session.activationState == .activated else {
+            print("[HealthManager] Cannot use transferUserInfo - session not activated")
+            return
+        }
+
+        let vitalsData = vitals ?? createVitalsPayload()
+
+        // Add unique transfer ID to prevent duplicates
+        var transferData = vitalsData
+        transferData["transfer_id"] = UUID().uuidString
+        transferData["transfer_timestamp"] = Date().timeIntervalSince1970
+
+        let transfer = session.transferUserInfo(transferData)
+        print("[HealthManager] 📬 Queued vitals via transferUserInfo (ID: \(transferData["transfer_id"] ?? "unknown"))")
+
+        // Track outstanding transfers
+        outstandingTransfers.append(transfer)
+        cleanupCompletedTransfers()
+    }
+
+    /// Send fall alert with guaranteed delivery - NEVER drop fall alerts
+    private func sendFallAlertViaTransferUserInfo(fallData: [String: Any]) {
+        guard let session = wcSession, session.activationState == .activated else {
+            // CRITICAL: Don't lose fall alerts - buffer for later
+            print("[HealthManager] 🚨 Session not activated - buffering fall alert for later delivery")
+            bufferFallAlert(fallData)
+            return
+        }
+
+        var transferData = fallData
+        transferData["transfer_id"] = UUID().uuidString
+        transferData["transfer_timestamp"] = Date().timeIntervalSince1970
+        transferData["priority"] = "high"
+
+        let transfer = session.transferUserInfo(transferData)
+        print("[HealthManager] 🚨📬 Queued FALL ALERT via transferUserInfo (guaranteed delivery)")
+
+        outstandingTransfers.append(transfer)
+        cleanupCompletedTransfers()
+    }
+
+    // Track outstanding transfers
+    private var outstandingTransfers: [WCSessionUserInfoTransfer] = []
+
+    private func cleanupCompletedTransfers() {
+        outstandingTransfers.removeAll { $0.isTransferring == false }
+        if !outstandingTransfers.isEmpty {
+            print("[HealthManager] 📊 Outstanding transfers: \(outstandingTransfers.count)")
+        }
+    }
+
     private func createVitalsPayload() -> [String: Any] {
         let awakeTime = sleepStages.first(where: { $0.stage == "Awake" })?.hours ?? 0
         let deepSleep = sleepStages.first(where: { $0.stage == "Deep" })?.hours ?? 0
@@ -345,10 +816,12 @@ class HealthManager: NSObject, ObservableObject, WCSessionDelegate, HKWorkoutSes
         return [
             "type": "watch_vitals",
             "timestamp": ISO8601DateFormatter().string(from: Date()),
+            // Vitals
             "heart_rate": heartRate,
             "blood_oxygen": bloodOxygen,
             "hrv": hrv,
             "respiratory_rate": respiratoryRate,
+            // Sleep
             "total_sleep_hours": totalSleepHours,
             "deep_sleep_hours": deepSleep,
             "rem_sleep_hours": remSleep,
@@ -356,8 +829,16 @@ class HealthManager: NSObject, ObservableObject, WCSessionDelegate, HKWorkoutSes
             "awake_time_hours": awakeTime,
             "awakenings_count": awakeningsCount,
             "sleep_quality": calculateSleepQuality(),
+            // Falls
             "falls_count": recentFalls.count,
-            "fall_detected": !recentFalls.isEmpty
+            "fall_detected": !recentFalls.isEmpty,
+            // Activity
+            "steps": steps,
+            "calories": Int(calories),
+            "distance_km": distanceKm,
+            "floors_climbed": floorsClimbed,
+            "exercise_minutes": exerciseMinutes,
+            "stand_minutes": standMinutes
         ]
     }
 
@@ -388,15 +869,30 @@ class HealthManager: NSObject, ObservableObject, WCSessionDelegate, HKWorkoutSes
         }
 
         let typesToRead: Set<HKObjectType> = [
+            // Vitals
             HKObjectType.quantityType(forIdentifier: .heartRate)!,
             HKObjectType.quantityType(forIdentifier: .oxygenSaturation)!,
             HKObjectType.quantityType(forIdentifier: .heartRateVariabilitySDNN)!,
             HKObjectType.quantityType(forIdentifier: .respiratoryRate)!,
+            // Sleep
             HKObjectType.categoryType(forIdentifier: .sleepAnalysis)!,
+            // Falls
+            HKObjectType.quantityType(forIdentifier: .numberOfTimesFallen)!,
+            // Activity
+            HKObjectType.quantityType(forIdentifier: .stepCount)!,
+            HKObjectType.quantityType(forIdentifier: .activeEnergyBurned)!,
+            HKObjectType.quantityType(forIdentifier: .distanceWalkingRunning)!,
+            HKObjectType.quantityType(forIdentifier: .flightsClimbed)!,
+            HKObjectType.quantityType(forIdentifier: .appleExerciseTime)!,
+            HKObjectType.quantityType(forIdentifier: .appleStandTime)!,
+        ]
+
+        // Types to write - falls detected by CoreMotion need to be saved to HealthKit
+        let typesToShare: Set<HKSampleType> = [
             HKObjectType.quantityType(forIdentifier: .numberOfTimesFallen)!,
         ]
 
-        healthStore.requestAuthorization(toShare: nil, read: typesToRead) { success, error in
+        healthStore.requestAuthorization(toShare: typesToShare, read: typesToRead) { success, error in
             DispatchQueue.main.async {
                 self.isHealthKitAuthorized = success
 
@@ -406,6 +902,7 @@ class HealthManager: NSObject, ObservableObject, WCSessionDelegate, HKWorkoutSes
                     self.fetchLatestVitals()
                     self.fetchSleepData()
                     self.fetchFallData()
+                    self.fetchActivityData()  // Fetch activity data
                     self.startRealTimeMonitoring()
                     self.startFallDetection()  // Start CoreMotion fall detection
                 } else if let error = error {
@@ -431,13 +928,23 @@ class HealthManager: NSObject, ObservableObject, WCSessionDelegate, HKWorkoutSes
 
         // Use a timer to periodically refresh data AND send to iPhone
         // This ensures iPhone always gets latest data even if values haven't changed
+        var activityRefreshCounter = 0
         refreshTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
             self?.fetchLatestVitals()
+
+            // Refresh activity data every 60 seconds (12 cycles)
+            activityRefreshCounter += 1
+            if activityRefreshCounter >= 12 {
+                self?.fetchActivityData()
+                activityRefreshCounter = 0
+            }
+
             // Always send current vitals to iPhone every 5 seconds for real-time sync
             self?.sendVitalsToiPhone()
         }
 
         // Send initial vitals immediately
+        fetchActivityData()
         sendVitalsToiPhone()
 
         print("[HealthManager] ✅ Real-time monitoring started (5-second sync enabled)")
@@ -845,9 +1352,38 @@ class HealthManager: NSObject, ObservableObject, WCSessionDelegate, HKWorkoutSes
         let startOfYesterday = Calendar.current.date(byAdding: .day, value: -1, to: now)!
         let predicate = HKQuery.predicateForSamples(withStart: startOfYesterday, end: now, options: .strictEndDate)
 
-        let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
+        let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)
         let query = HKSampleQuery(sampleType: sleepType, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: [sortDescriptor]) { [weak self] _, samples, _ in
             guard let samples = samples as? [HKCategorySample] else { return }
+
+            // Filter to prioritize Apple Watch/HealthKit native data
+            var watchSamples: [HKCategorySample] = []
+            var otherSamples: [HKCategorySample] = []
+
+            for sample in samples {
+                let sourceName = sample.sourceRevision.source.name.lowercased()
+                let bundleId = sample.sourceRevision.source.bundleIdentifier.lowercased()
+
+                // Check if sample is from Apple Watch or Apple's native sleep tracking
+                let isAppleWatch = sourceName.contains("watch") ||
+                                   bundleId.contains("com.apple.health") ||
+                                   bundleId.contains("com.apple.nano") ||
+                                   sample.device?.name?.lowercased().contains("watch") == true
+
+                if isAppleWatch {
+                    watchSamples.append(sample)
+                } else {
+                    otherSamples.append(sample)
+                }
+            }
+
+            // Use Apple Watch samples if available, otherwise fall back to other sources
+            let samplesToUse = !watchSamples.isEmpty ? watchSamples : otherSamples
+            print("[HealthManager] 😴 Using \(samplesToUse.count) samples (Watch: \(watchSamples.count), Other: \(otherSamples.count))")
+
+            // Deduplicate overlapping samples
+            let deduplicatedSamples = self?.deduplicateSleepSamples(samplesToUse) ?? samplesToUse
+            print("[HealthManager] 😴 After deduplication: \(deduplicatedSamples.count) samples")
 
             var totalSleep: Double = 0
             var deepSleep: Double = 0
@@ -855,7 +1391,7 @@ class HealthManager: NSObject, ObservableObject, WCSessionDelegate, HKWorkoutSes
             var coreSleep: Double = 0
             var awakeSleep: Double = 0
 
-            for sample in samples {
+            for sample in deduplicatedSamples {
                 let duration = sample.endDate.timeIntervalSince(sample.startDate) / 3600 // Hours
 
                 switch sample.value {
@@ -877,6 +1413,8 @@ class HealthManager: NSObject, ObservableObject, WCSessionDelegate, HKWorkoutSes
                     break
                 }
             }
+
+            print("[HealthManager] 😴 Final sleep: \(String(format: "%.2f", totalSleep))h (Deep: \(String(format: "%.2f", deepSleep))h, REM: \(String(format: "%.2f", remSleep))h, Core: \(String(format: "%.2f", coreSleep))h)")
 
             DispatchQueue.main.async {
                 self?.totalSleepHours = totalSleep
@@ -901,6 +1439,38 @@ class HealthManager: NSObject, ObservableObject, WCSessionDelegate, HKWorkoutSes
         healthStore.execute(query)
     }
 
+    /// Deduplicate overlapping sleep samples to avoid double-counting
+    private func deduplicateSleepSamples(_ samples: [HKCategorySample]) -> [HKCategorySample] {
+        guard !samples.isEmpty else { return [] }
+
+        // Sort by start date
+        let sorted = samples.sorted { $0.startDate < $1.startDate }
+
+        var result: [HKCategorySample] = []
+        var processedIntervals: [(start: Date, end: Date)] = []
+
+        for sample in sorted {
+            let sampleStart = sample.startDate
+            let sampleEnd = sample.endDate
+
+            // Check if this sample overlaps with any already processed interval
+            var isOverlapping = false
+            for interval in processedIntervals {
+                if sampleStart < interval.end && sampleEnd > interval.start {
+                    isOverlapping = true
+                    break
+                }
+            }
+
+            if !isOverlapping {
+                result.append(sample)
+                processedIntervals.append((start: sampleStart, end: sampleEnd))
+            }
+        }
+
+        return result
+    }
+
     // MARK: - Fall Detection
     func fetchFallData() {
         guard let fallType = HKQuantityType.quantityType(forIdentifier: .numberOfTimesFallen) else { return }
@@ -921,6 +1491,103 @@ class HealthManager: NSObject, ObservableObject, WCSessionDelegate, HKWorkoutSes
             DispatchQueue.main.async {
                 self?.recentFalls = falls
             }
+        }
+
+        healthStore.execute(query)
+    }
+
+    // MARK: - Activity Data
+    func fetchActivityData() {
+        let now = Date()
+        let startOfDay = Calendar.current.startOfDay(for: now)
+        let predicate = HKQuery.predicateForSamples(withStart: startOfDay, end: now, options: .strictStartDate)
+
+        if DEBUG_MODE { print("[HealthManager] 🏃 DEBUG: Fetching activity data for today...") }
+
+        // Track completion for debug logging
+        var completedFetches = 0
+        let totalFetches = 6
+
+        // Fetch Steps
+        fetchTodaySum(for: .stepCount, unit: HKUnit.count(), predicate: predicate) { [weak self] value in
+            DispatchQueue.main.async {
+                self?.steps = Int(value)
+                completedFetches += 1
+                if self?.DEBUG_MODE == true && completedFetches == totalFetches {
+                    self?.logActivitySummary()
+                }
+            }
+        }
+
+        // Fetch Active Calories
+        fetchTodaySum(for: .activeEnergyBurned, unit: HKUnit.kilocalorie(), predicate: predicate) { [weak self] value in
+            DispatchQueue.main.async {
+                self?.calories = value
+                completedFetches += 1
+            }
+        }
+
+        // Fetch Distance (walking + running)
+        fetchTodaySum(for: .distanceWalkingRunning, unit: HKUnit.meterUnit(with: .kilo), predicate: predicate) { [weak self] value in
+            DispatchQueue.main.async {
+                self?.distanceKm = value
+                completedFetches += 1
+            }
+        }
+
+        // Fetch Floors Climbed
+        fetchTodaySum(for: .flightsClimbed, unit: HKUnit.count(), predicate: predicate) { [weak self] value in
+            DispatchQueue.main.async {
+                self?.floorsClimbed = Int(value)
+                completedFetches += 1
+            }
+        }
+
+        // Fetch Exercise Minutes
+        fetchTodaySum(for: .appleExerciseTime, unit: HKUnit.minute(), predicate: predicate) { [weak self] value in
+            DispatchQueue.main.async {
+                self?.exerciseMinutes = Int(value)
+                completedFetches += 1
+            }
+        }
+
+        // Fetch Stand Minutes
+        fetchTodaySum(for: .appleStandTime, unit: HKUnit.minute(), predicate: predicate) { [weak self] value in
+            DispatchQueue.main.async {
+                self?.standMinutes = Int(value)
+                completedFetches += 1
+                if self?.DEBUG_MODE == true && completedFetches == totalFetches {
+                    self?.logActivitySummary()
+                }
+            }
+        }
+
+        print("[HealthManager] 🏃 Activity data fetch initiated")
+    }
+
+    /// Log activity summary for debugging
+    private func logActivitySummary() {
+        print("[HealthManager] 🏃 DEBUG Activity Summary:")
+        print("  Steps: \(steps) | Calories: \(Int(calories)) kcal")
+        print("  Distance: \(String(format: "%.2f", distanceKm)) km | Floors: \(floorsClimbed)")
+        print("  Exercise: \(exerciseMinutes) min | Stand: \(standMinutes) min")
+    }
+
+    private func fetchTodaySum(for identifier: HKQuantityTypeIdentifier, unit: HKUnit, predicate: NSPredicate, completion: @escaping (Double) -> Void) {
+        guard let quantityType = HKQuantityType.quantityType(forIdentifier: identifier) else {
+            completion(0)
+            return
+        }
+
+        let query = HKStatisticsQuery(quantityType: quantityType, quantitySamplePredicate: predicate, options: .cumulativeSum) { _, result, error in
+            if let error = error {
+                print("[HealthManager] Error fetching \(identifier): \(error.localizedDescription)")
+                completion(0)
+                return
+            }
+
+            let value = result?.sumQuantity()?.doubleValue(for: unit) ?? 0
+            completion(value)
         }
 
         healthStore.execute(query)
@@ -997,30 +1664,36 @@ class HealthManager: NSObject, ObservableObject, WCSessionDelegate, HKWorkoutSes
             if !isInFreeFall {
                 isInFreeFall = true
                 freeFallStartTime = Date()
-                print("[HealthManager] 🔻 Free fall detected! G=\(String(format: "%.2f", totalG))")
+                if DEBUG_MODE { print("[HealthManager] 🔻 Free fall phase started G=\(String(format: "%.2f", totalG))") }
             }
         } else {
             // Phase 2: Detect impact after free fall
             if isInFreeFall, let fallStart = freeFallStartTime {
                 let fallDuration = Date().timeIntervalSince(fallStart)
 
-                // If we had a free fall phase and now see high impact
-                if totalG > impactThreshold && fallDuration < fallConfirmationWindow {
-                    // FALL DETECTED!
-                    print("[HealthManager] ⚠️ FALL DETECTED! Impact=\(String(format: "%.2f", totalG))G, Duration=\(String(format: "%.2f", fallDuration))s")
+                // Only consider it a real fall if free-fall duration was significant
+                // This filters out micro-dips from quick arm movements
+                if fallDuration >= minFreeFallDuration && fallDuration < fallConfirmationWindow {
+                    // If we had a real free fall phase and now see high impact
+                    if totalG > impactThreshold {
+                        // FALL DETECTED!
+                        print("[HealthManager] ⚠️ FALL DETECTED! Impact=\(String(format: "%.2f", totalG))G, FreeFall=\(String(format: "%.2f", fallDuration))s")
 
-                    // Determine severity based on impact force
-                    let severity: String
-                    if totalG > 8.0 {
-                        severity = "high"
-                    } else if totalG > 5.0 {
-                        severity = "medium"
-                    } else {
-                        severity = "low"
+                        // Determine severity based on impact force
+                        let severity: String
+                        if totalG > 10.0 {
+                            severity = "high"
+                        } else if totalG > 6.0 {
+                            severity = "medium"
+                        } else {
+                            severity = "low"
+                        }
+
+                        // Record the fall
+                        handleFallDetected(impactG: totalG, severity: severity)
                     }
-
-                    // Record the fall
-                    handleFallDetected(impactG: totalG, severity: severity)
+                } else if DEBUG_MODE && fallDuration < minFreeFallDuration {
+                    print("[HealthManager] 📊 Ignored micro-dip: duration=\(String(format: "%.3f", fallDuration))s < \(minFreeFallDuration)s")
                 }
 
                 // Reset free fall state
@@ -1028,19 +1701,20 @@ class HealthManager: NSObject, ObservableObject, WCSessionDelegate, HKWorkoutSes
                 freeFallStartTime = nil
             }
 
-            // Also detect sudden high impacts without free fall (slip and fall)
-            if totalG > impactThreshold * 1.5 {  // Higher threshold for impact-only detection
+            // Impact-only detection (slip and fall without free-fall phase)
+            // Using much higher threshold to avoid false positives from arm movements
+            if totalG > impactOnlyThreshold {
                 let now = Date()
                 if let lastImpact = lastHighImpactTime {
                     // Avoid duplicate detections within 5 seconds
                     if now.timeIntervalSince(lastImpact) > 5.0 {
-                        print("[HealthManager] ⚠️ HIGH IMPACT DETECTED! G=\(String(format: "%.2f", totalG))")
-                        handleFallDetected(impactG: totalG, severity: totalG > 8.0 ? "high" : "medium")
+                        print("[HealthManager] ⚠️ SEVERE IMPACT DETECTED! G=\(String(format: "%.2f", totalG)) (threshold: \(impactOnlyThreshold))")
+                        handleFallDetected(impactG: totalG, severity: totalG > 15.0 ? "high" : "medium")
                         lastHighImpactTime = now
                     }
                 } else {
-                    print("[HealthManager] ⚠️ HIGH IMPACT DETECTED! G=\(String(format: "%.2f", totalG))")
-                    handleFallDetected(impactG: totalG, severity: totalG > 8.0 ? "high" : "medium")
+                    print("[HealthManager] ⚠️ SEVERE IMPACT DETECTED! G=\(String(format: "%.2f", totalG)) (threshold: \(impactOnlyThreshold))")
+                    handleFallDetected(impactG: totalG, severity: totalG > 15.0 ? "high" : "medium")
                     lastHighImpactTime = now
                 }
             }
@@ -1072,6 +1746,9 @@ class HealthManager: NSObject, ObservableObject, WCSessionDelegate, HKWorkoutSes
             WKInterfaceDevice.current().play(.notification)
         }
 
+        // IMPORTANT: Write fall to HealthKit so iPhone can read it
+        saveFallToHealthKit(date: fallEvent.date)
+
         // Send fall alert to iPhone immediately
         sendFallAlertToiPhone(fallEvent: fallEvent)
 
@@ -1084,13 +1761,47 @@ class HealthManager: NSObject, ObservableObject, WCSessionDelegate, HKWorkoutSes
         }
     }
 
-    /// Send fall alert to iPhone via WatchConnectivity
-    private func sendFallAlertToiPhone(fallEvent: FallEvent) {
-        guard let session = wcSession, session.activationState == .activated else {
-            print("[HealthManager] Cannot send fall alert - WCSession not activated")
+    /// Save detected fall to HealthKit so iPhone can read it via HealthKit queries
+    private func saveFallToHealthKit(date: Date) {
+        guard let fallType = HKQuantityType.quantityType(forIdentifier: .numberOfTimesFallen) else {
+            print("[HealthManager] ❌ Fall quantity type not available")
             return
         }
 
+        // Check if we have write authorization
+        let authStatus = healthStore.authorizationStatus(for: fallType)
+        guard authStatus == .sharingAuthorized else {
+            print("[HealthManager] ⚠️ Not authorized to write falls to HealthKit (status: \(authStatus.rawValue))")
+            return
+        }
+
+        // Create a fall sample (1 fall event)
+        let fallQuantity = HKQuantity(unit: HKUnit.count(), doubleValue: 1.0)
+        let fallSample = HKQuantitySample(
+            type: fallType,
+            quantity: fallQuantity,
+            start: date,
+            end: date,
+            metadata: [
+                HKMetadataKeyWasUserEntered: false,
+                "com.kindura.fallSource": "CoreMotion"
+            ]
+        )
+
+        // Save to HealthKit
+        healthStore.save(fallSample) { success, error in
+            if success {
+                print("[HealthManager] ✅ Fall saved to HealthKit successfully")
+            } else if let error = error {
+                print("[HealthManager] ❌ Failed to save fall to HealthKit: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    /// Send fall alert to iPhone via WatchConnectivity - NEVER lose fall alerts
+    private func sendFallAlertToiPhone(fallEvent: FallEvent) {
+        // Create fallData FIRST - before any guards that might return
+        // Include falls_count so iPhone can display cumulative count immediately
         let fallData: [String: Any] = [
             "type": "fall_alert",
             "timestamp": ISO8601DateFormatter().string(from: fallEvent.date),
@@ -1098,24 +1809,39 @@ class HealthManager: NSObject, ObservableObject, WCSessionDelegate, HKWorkoutSes
             "impact_g": fallEvent.impactG,
             "heart_rate": heartRate,
             "blood_oxygen": bloodOxygen,
-            "requires_response": true
+            "requires_response": true,
+            "falls_count": recentFalls.count,  // Cumulative falls count for iPhone display
+            "fall_detected": true               // Explicit fall detected flag
         ]
 
+        // ALWAYS queue via transferUserInfo for guaranteed delivery
+        // Fall alerts are CRITICAL and must NEVER be lost
+        // sendFallAlertViaTransferUserInfo will buffer if session not activated
+        sendFallAlertViaTransferUserInfo(fallData: fallData)
+
+        // Try real-time delivery if session is available
+        guard let session = wcSession, session.activationState == .activated else {
+            print("[HealthManager] 🚨 Fall alert buffered - WCSession not activated")
+            return
+        }
+
         if session.isReachable {
+            // Also try real-time delivery for immediate response
             session.sendMessage(fallData, replyHandler: { response in
-                print("[HealthManager] ✅ Fall alert sent to iPhone: \(response)")
+                print("[HealthManager] ✅ Fall alert sent to iPhone (real-time): \(response)")
             }, errorHandler: { error in
-                print("[HealthManager] ❌ Failed to send fall alert: \(error.localizedDescription)")
-                // Try application context as backup
+                print("[HealthManager] ⚠️ Real-time fall alert failed (queued via transferUserInfo): \(error.localizedDescription)")
+                // Also update application context for latest state
                 try? session.updateApplicationContext(fallData)
             })
         } else {
-            // Use application context for when iPhone isn't reachable
+            // iPhone not reachable - transferUserInfo already queued above
+            // Also update application context so iPhone gets it when app opens
             do {
                 try session.updateApplicationContext(fallData)
-                print("[HealthManager] Fall alert sent via application context")
+                print("[HealthManager] Fall alert context updated (transferUserInfo queued)")
             } catch {
-                print("[HealthManager] Failed to send fall alert via context: \(error)")
+                print("[HealthManager] Context update failed, but transferUserInfo is queued: \(error)")
             }
         }
     }

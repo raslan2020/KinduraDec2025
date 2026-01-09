@@ -1,5 +1,7 @@
 # Kindura AI - Complete Project Handover Documentation
 
+**Last Updated**: 2026-01-02
+
 ## Table of Contents
 1. [Project Overview](#project-overview)
 2. [Architecture](#architecture)
@@ -7,57 +9,89 @@
 4. [Setup Instructions](#setup-instructions)
 5. [Running the Application](#running-the-application)
 6. [Key Features](#key-features)
-7. [Language Support](#language-support)
-8. [API Documentation](#api-documentation)
-9. [Troubleshooting](#troubleshooting)
-10. [Development Guidelines](#development-guidelines)
+7. [Health Data Architecture](#health-data-architecture)
+8. [Language Support](#language-support)
+9. [API Documentation](#api-documentation)
+10. [Troubleshooting](#troubleshooting)
+11. [Development Guidelines](#development-guidelines)
+12. [Recent Changes](#recent-changes)
 
 ---
 
 ## Project Overview
 
-Kindura AI is a health and wellness application that provides AI-powered voice assistance for patients with medical conditions. The system consists of three main components:
+Kindura AI is a health and wellness application that provides AI-powered voice assistance for patients with medical conditions. The system consists of four main components:
 
-1. **Flutter Mobile App** - iOS/Android client application
+1. **Flutter Mobile App** - iOS client application
 2. **Django REST API** - Backend server for data management
 3. **LiveKit Agent** - Real-time voice communication with AI
+4. **Apple Watch App** - Real-time vitals monitoring & fall detection
 
 ### Key Technologies
 - **Frontend**: Flutter, GetX state management, LiveKit client SDK
-- **Backend**: Django REST Framework, SQLite database
+- **Backend**: Django REST Framework, PostgreSQL database
 - **AI Agent**: Python, LiveKit SDK, OpenAI GPT-4, Deepgram/OpenAI Whisper STT/TTS
 - **Real-time Communication**: LiveKit WebRTC platform
+- **Health Data**: Apple HealthKit, WatchConnectivity (WCSession)
 
 ---
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                     Flutter Mobile App                       │
-│  (iOS/Android - Voice activation, UI, LiveKit client)        │
-└────────────┬─────────────────────────┬──────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                      Apple Watch App                             │
+│  (watchOS - Real-time vitals, Fall detection, HKWorkoutSession) │
+└────────────┬────────────────────────────────────────────────────┘
+             │ WCSession
+             ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                     Flutter Mobile App (iOS)                     │
+│  (Voice activation, UI, LiveKit client, HealthKit integration)  │
+└────────────┬─────────────────────────┬──────────────────────────┘
              │                         │
              │ HTTP/REST               │ WebRTC/WebSocket
              │                         │
-┌────────────▼─────────────┐ ┌────────▼──────────────────────┐
-│   Django REST API        │ │    LiveKit Cloud Server        │
-│  (localhost:8000)        │ │  (wss://kindura-u99yilqz...)  │
-└────────────┬─────────────┘ └────────┬──────────────────────┘
+┌────────────▼─────────────┐ ┌────────▼──────────────────────────┐
+│   Django REST API        │ │    LiveKit Cloud Server           │
+│  (localhost:8000)        │ │  (wss://kindura-u99yilqz...)      │
+└────────────┬─────────────┘ └────────┬──────────────────────────┘
              │                         │
-┌────────────▼─────────────┐ ┌────────▼──────────────────────┐
-│    SQLite Database       │ │    LiveKit Python Agent       │
-│  (User data, courses)    │ │  (AI conversation handler)    │
-└──────────────────────────┘ └───────────────────────────────┘
+┌────────────▼─────────────┐ ┌────────▼──────────────────────────┐
+│   PostgreSQL Database    │ │    LiveKit Python Agent           │
+│  (kindura_db)            │ │  (AI conversation handler)        │
+└──────────────────────────┘ └───────────────────────────────────┘
 ```
 
-### Data Flow
+### Health Data Flow
+```
+┌─────────────────────────────────────────────────────────────┐
+│                   PRIMARY: Apple Health (HealthKit)          │
+│  - Always the main data source                               │
+│  - Works with Oura, Whoop, Ultrahuman, and any HealthKit app│
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│           SECONDARY: Apple Watch (if paired)                 │
+│  - Real-time vitals updates via WCSession                   │
+│  - Fall detection (Watch-exclusive feature)                  │
+│  - Supplements HealthKit data, doesn't replace it           │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Voice Activation Flow
 1. User speaks trigger phrase ("hey kindura") → Flutter app detects
 2. App requests LiveKit token from Django API
 3. App connects to LiveKit room
 4. LiveKit Agent joins room and starts conversation
 5. Real-time audio streaming between app and agent
 6. Agent uses GPT-4 for responses, STT/TTS for audio processing
+
+### Health Update Triggers
+1. **Apple Watch**: WCSession message (real-time on significant change)
+2. **HealthKit Observer**: HKObserverQuery fires when data changes
+3. **Manual Refresh**: User pull-to-refresh
 
 ---
 
@@ -67,44 +101,55 @@ Kindura AI is a health and wellness application that provides AI-powered voice a
 Kinduraios/                     # Main Flutter project
 ├── lib/
 │   ├── screens/               # UI screens and controllers
-│   │   ├── home/             # Home screen with voice activation
-│   │   ├── profile/          # User profile and language settings
+│   │   ├── home/             # Home screen with health dashboard
+│   │   ├── profile/          # User profile and settings
+│   │   ├── medication/       # Medication tracking
+│   │   ├── labs/             # Lab reports & biomarkers
+│   │   ├── vitals_history/   # Historical health data
 │   │   └── login/            # Authentication
-│   ├── models/               # Data models
+│   ├── models/               # Data models (health, medication, etc.)
 │   ├── repository/           # API communication layer
-│   ├── data/
-│   │   └── network/          # Network services
+│   ├── services/             # App services
+│   │   ├── watch_vitals_service.dart  # Native bridge for Watch/HealthKit
+│   │   ├── notification_service.dart  # Local notifications
+│   │   └── voice_service.dart         # Speech recognition
 │   ├── res/
 │   │   ├── app_url/          # API endpoints configuration
 │   │   └── routes/           # Navigation routes
 │   └── user_preference/      # Local storage management
-├── android/                   # Android specific code
-├── ios/                      # iOS specific code
+├── ios/
+│   └── Runner/
+│       └── AppDelegate.swift  # WatchConnectivity, HealthKit observers
+├── watchos/                   # Apple Watch app
+│   └── KinduraWatch/
+│       ├── KinduraWatchApp.swift
+│       ├── HealthManager.swift  # Watch health data collection
+│       └── ContentView.swift
+├── startkindura.sh           # Quick start script (all services)
+├── setup_local.sh            # Local development setup
 └── pubspec.yaml              # Flutter dependencies
 
 KinduraAPIs-0.0.1/             # Django backend
-├── kinduraapis/
-│   ├── settings.py           # Django configuration
-│   ├── urls.py              # Main URL routing
-│   └── wsgi.py
+├── medical_app/
+│   ├── settings.py           # Django configuration (PostgreSQL)
+│   └── urls.py              # Main URL routing
 ├── users/                    # User management app
+├── medicines/                # Medication management
 ├── health_profile/           # Health profile management
-├── courses/                  # Medical courses management
-├── livekit/                  # LiveKit integration
+├── medical_reports/          # Lab reports & documents
+├── livekit_app/              # LiveKit integration
 ├── manage.py                 # Django management script
 ├── requirements.txt          # Python dependencies
-├── db.sqlite3               # SQLite database
 └── .env                     # Environment variables
 
 kinduralivekit-0.0.1/          # LiveKit Agent
 ├── agent.py                  # Main agent script
 ├── utils/
 │   ├── global_variables.py  # Prompts and configurations
-│   ├── json_to_be.py        # JSON upload utilities
+│   ├── watch_vitals_api.py  # Agent access to health data
 │   └── language_config.py   # Modular language configuration
 ├── user_logs/               # Conversation transcripts
 ├── requirements.txt         # Python dependencies
-├── venv/                    # Python virtual environment
 └── .env                     # Environment variables
 ```
 
@@ -113,104 +158,136 @@ kinduralivekit-0.0.1/          # LiveKit Agent
 ## Setup Instructions
 
 ### Prerequisites
-- **macOS** (for iOS development) or Linux/Windows (Android only)
+- **macOS** (required for iOS/watchOS development)
 - **Flutter SDK** 3.x or higher
 - **Python** 3.11 or higher
-- **Xcode** (for iOS)
-- **Android Studio** (for Android)
+- **Xcode** 15+ (for iOS/watchOS)
+- **PostgreSQL** 15 (via Homebrew)
 - **Git**
 
-### 1. Clone the Repository
+### Quick Start (Recommended)
+
+```bash
+# First time setup (installs PostgreSQL, creates database, test user)
+./setup_local.sh
+
+# Start all services (PostgreSQL, Django API, LiveKit, Flutter)
+./startkindura.sh
+```
+
+### Manual Setup
+
+#### 1. Clone the Repository
 ```bash
 git clone <repository-url>
 cd Kinduraios
 ```
 
-### 2. Setup Django Backend
+#### 2. Setup PostgreSQL Database
 
 ```bash
-# Navigate to Django project
+# Install PostgreSQL
+brew install postgresql@15
+brew services start postgresql@15
+
+# Create database and user
+/opt/homebrew/opt/postgresql@15/bin/createdb kindura_db
+/opt/homebrew/opt/postgresql@15/bin/psql -d kindura_db -c "CREATE USER kindura_user WITH PASSWORD 'kindura_pass';"
+/opt/homebrew/opt/postgresql@15/bin/psql -d kindura_db -c "GRANT ALL PRIVILEGES ON DATABASE kindura_db TO kindura_user;"
+/opt/homebrew/opt/postgresql@15/bin/psql -d kindura_db -c "ALTER ROLE kindura_user SET default_transaction_isolation TO 'read committed';"
+/opt/homebrew/opt/postgresql@15/bin/psql -d kindura_db -c "ALTER ROLE kindura_user SET timezone TO 'UTC';"
+```
+
+#### 3. Setup Django Backend
+
+```bash
 cd KinduraAPIs-0.0.1
 
 # Create virtual environment
-python3.11 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+python3.11 -m venv .venv
+source .venv/bin/activate
 
 # Install dependencies
 pip install -r requirements.txt
-
-# Create .env file
-cat > .env << 'EOF'
-SECRET_KEY=your-secret-key-here
-DEBUG=True
-ALLOWED_HOSTS=localhost,127.0.0.1
-LIVEKIT_HOST=wss://kindura-u99yilqz.livekit.cloud
-LIVEKIT_API_KEY=APImEMbwqie8wdf
-LIVEKIT_SECRET_KEY=LqFYfro1D2IVIGV0UiPm5Fk2GxS3lqCeP2r0Y7HHfyP
-EOF
 
 # Run migrations
 python manage.py migrate
 
-# Create superuser (optional)
+# Create test user (or use setup_local.sh)
 python manage.py createsuperuser
 
 # Start server
-python manage.py runserver
+python manage.py runserver 0.0.0.0:8000
 ```
 
-### 3. Setup LiveKit Agent
+#### 4. Setup LiveKit Agent
 
 ```bash
-# Navigate to agent directory
-cd ../kinduralivekit-0.0.1
+cd kinduralivekit-0.0.1
 
 # Create virtual environment
 python3.11 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+source venv/bin/activate
 
 # Install dependencies
 pip install -r requirements.txt
 
-# Create .env file
+# Create .env file with your API keys
 cat > .env << 'EOF'
 LIVEKIT_URL=wss://kindura-u99yilqz.livekit.cloud
-LIVEKIT_API_KEY=APImEMbwqie8wdf
-LIVEKIT_API_SECRET=LqFYfro1D2IVIGV0UiPm5Fk2GxS3lqCeP2r0Y7HHfyP
-OPENAI_API_KEY=your-openai-api-key
-DEEPGRAM_API_KEY=your-deepgram-api-key
+LIVEKIT_API_KEY=<your-key>
+LIVEKIT_API_SECRET=<your-secret>
+OPENAI_API_KEY=<your-openai-key>
+DEEPGRAM_API_KEY=<your-deepgram-key>
 EOF
 
 # Run agent
 python agent.py dev
 ```
 
-### 4. Setup Flutter App
+#### 5. Setup Flutter App
 
 ```bash
-# Navigate to Flutter project
-cd ../Kinduraios
+cd Kinduraios
 
 # Install Flutter dependencies
 flutter pub get
 
-# Update API endpoints for local development
+# Configure for local development
 # Edit lib/res/app_url/app_url.dart:
-# Change baseUrl to: http://localhost:8000/api
+# Set: static const bool isLocalEnvironment = true;
 
 # For iOS setup
-cd ios
-pod install
-cd ..
-
-# List available devices
-flutter devices
+cd ios && pod install && cd ..
 
 # Run on iOS simulator
 flutter run -d <device-id>
+```
 
-# Or run on Android
-flutter run -d android
+### Environment Configuration
+
+**`.env.local`** - Auto-generated by `setup_local.sh`:
+```bash
+LOCAL_DEV_TOKEN=<your_token_here>
+DB_NAME=kindura_db
+DB_USER=kindura_user
+DB_PASSWORD=kindura_pass
+```
+
+### PostgreSQL Management
+
+```bash
+# Start/Stop PostgreSQL
+brew services start postgresql@15
+brew services stop postgresql@15
+
+# Access database directly
+/opt/homebrew/opt/postgresql@15/bin/psql -d kindura_db
+
+# Reset database
+/opt/homebrew/opt/postgresql@15/bin/dropdb kindura_db
+/opt/homebrew/opt/postgresql@15/bin/createdb kindura_db
+cd KinduraAPIs-0.0.1 && ../.venv/bin/python manage.py migrate
 ```
 
 ---
@@ -296,6 +373,69 @@ python manage.py test                  # Run tests
 - Automatic room creation/deletion
 - Transcription display
 - Connection state management
+
+### 6. Health Data Integration
+- HealthKit integration for vitals, sleep, activity
+- Apple Watch real-time sync via WCSession
+- Event-driven updates (no polling)
+- Multi-device support (Oura, Whoop, Ultrahuman via HealthKit)
+
+---
+
+## Health Data Architecture
+
+### Data Source Modes
+
+The app supports multiple health data sources via `DataSourceMode`:
+
+| Mode | Description | Features |
+|------|-------------|----------|
+| `appleWatch` | Watch paired, use WCSession + HealthKit | Full real-time vitals, fall detection |
+| `healthKitOnly` | No Watch, use HealthKit only | Works with Oura, Whoop, Ultrahuman |
+| `manualOnly` | User enters data manually | No automatic data collection |
+
+### HealthKit Observers
+
+The app uses `HKObserverQuery` for event-driven updates (no polling):
+
+- **Heart Rate** (`heartRate`)
+- **Blood Oxygen** (`oxygenSaturation`)
+- **HRV** (`heartRateVariabilitySDNN`)
+- **Respiratory Rate** (`respiratoryRate`)
+- **Steps** (`stepCount`)
+- **Sleep** (`sleepAnalysis`)
+
+All observers have background delivery enabled with 5-second debounce.
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `ios/Runner/AppDelegate.swift` | WatchConnectivity, HealthKit observers, method channels |
+| `watchos/KinduraWatch/HealthManager.swift` | Watch health data collection, HKWorkoutSession |
+| `lib/services/watch_vitals_service.dart` | Flutter native bridge service |
+| `lib/screens/home/home_controller.dart` | Health state management |
+| `lib/models/health/data_source_mode.dart` | DataSourceMode enum |
+
+### Watch Real-Time Vitals
+
+Apple Watch sends vitals immediately when values change significantly:
+- Heart rate: 2+ BPM change
+- Blood oxygen: 1%+ change
+- HRV: 2+ ms change
+- Respiratory rate: 0.5+ br/m change
+
+### PostgreSQL Health Tables
+
+- `health_heart_rate_history`
+- `health_blood_oxygen_history`
+- `health_hrv_history`
+- `health_sleep_history`
+- `health_activity_history`
+
+**API Endpoints**:
+- `POST /api/health-history/batch/` - Bulk save health records
+- `GET /api/health-history/` - Retrieve with day/week/month grouping
 
 ---
 
@@ -592,11 +732,57 @@ Ensure all `.env` files are properly configured with production values.
 
 For issues or questions about the codebase:
 1. Check this documentation first
-2. Review code comments and docstrings
-3. Test in development environment
-4. Check logs for error messages
+2. Review `changes.md` for recent updates
+3. Review code comments and docstrings
+4. Test in development environment
+5. Check logs for error messages
 
 ---
 
-*Last Updated: September 2, 2025*
-*Version: 1.0.0*
+## Recent Changes
+
+### 2025-12-30
+
+**App Resilience & Crash Prevention**
+- Fixed white screen when app reopened after manual close
+- Added 5-second safety timeout in splash screen
+- Lazy controller initialization (network-dependent controllers)
+- Better error handling for network issues in login
+
+**Login Authentication Fix**
+- Added `requireAuth: false` to login/signup API calls
+- Fixed 400 Bad Request errors
+
+**HealthKit Observer Updates**
+- Added HRV observer (`heartRateVariabilitySDNN`)
+- Added Respiratory Rate observer (`respiratoryRate`)
+- Now monitoring 6 HealthKit types total
+
+### 2025-12-29
+
+**Multi-Device Health Data Architecture**
+- Added `DataSourceMode` enum (appleWatch, healthKitOnly, manualOnly)
+- Auto-detection of Apple Watch pairing
+- Settings UI for manual override
+- Conditional features based on mode (e.g., fall detection requires Watch)
+
+**Event-Driven Health Updates**
+- Removed 30-second periodic refresh
+- Added `HKObserverQuery` for real-time HealthKit changes
+- 5-second debounce prevents rapid successive updates
+
+### 2025-12-25
+
+**Real-Time Watch Sync**
+- Watch sends vitals on significant change (not throttled)
+- Enhanced `onVitalsReceived` callback
+
+**PostgreSQL Storage for Health Data**
+- New tables for heart rate, blood oxygen, HRV, sleep, activity history
+- Batch save and retrieval API endpoints
+- 3-month retention per user
+
+---
+
+*Last Updated: 2026-01-02*
+*Version: 2.0.0*

@@ -625,6 +625,153 @@ class UserViewSet(viewsets.ViewSet):
             logger.exception("Error generating report: %s", e)
             return error_response(f"Failed to generate report: {str(e)}", status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+    @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated], url_path='patient_reports/generate_async')
+    def generate_report_async(self, request):
+        """
+        Start background report generation and return immediately.
+        Returns report ID for status polling.
+        """
+        from .models import PatientReport
+        from datetime import date, timedelta
+        import threading
+
+        report_type = request.data.get('type') or request.data.get('report_type', 'daily')
+
+        # Determine date range for report
+        today = date.today()
+        if report_type == 'daily':
+            period_start = today
+            period_end = today
+        elif report_type == 'weekly':
+            period_start = today - timedelta(days=today.weekday())
+            period_end = period_start + timedelta(days=6)
+        else:  # monthly
+            period_start = today.replace(day=1)
+            next_month = today.replace(day=28) + timedelta(days=4)
+            period_end = next_month - timedelta(days=next_month.day)
+
+        # Check if report already exists for this date/type
+        existing = PatientReport.objects.filter(
+            user=request.user,
+            report_type=report_type,
+            report_date=period_end
+        ).first()
+
+        if existing:
+            if existing.status == 'processing':
+                # Already processing, return current status
+                return success_response({
+                    'report_id': existing.id,
+                    'status': 'processing',
+                    'progress': existing.progress,
+                    'message': 'Report generation already in progress'
+                })
+            else:
+                # Reset existing report for regeneration
+                existing.status = 'processing'
+                existing.progress = 0
+                existing.error_message = None
+                existing.period_start = period_start
+                existing.period_end = period_end
+                existing.report_data = None
+                existing.ai_analysis = None
+                existing.health_score = None
+                existing.save()
+                report = existing
+        else:
+            # Create new report with 'processing' status
+            report = PatientReport.objects.create(
+                user=request.user,
+                report_type=report_type,
+                report_date=period_end,
+                period_start=period_start,
+                period_end=period_end,
+                status='processing',
+                progress=0
+            )
+
+        # Start background generation
+        def generate_in_background(report_id, user_id):
+            from .models import PatientReport, User
+            from .report_service import ReportService
+            from django.db import connection
+
+            try:
+                # Re-fetch objects in new thread (Django connections are not thread-safe)
+                connection.close()
+                report = PatientReport.objects.get(id=report_id)
+                user = User.objects.get(id=user_id)
+
+                # Generate report with progress tracking
+                service = ReportService(user, report_instance=report)
+                report_data = service.generate_comprehensive_report(report_type)
+                service.save_report(report_data)
+
+                logger.info(f"Background report {report_id} completed successfully")
+
+            except Exception as e:
+                logger.exception(f"Background report {report_id} failed: {e}")
+                try:
+                    report = PatientReport.objects.get(id=report_id)
+                    report.status = 'failed'
+                    report.error_message = str(e)
+                    report.save()
+                except Exception:
+                    pass
+
+        thread = threading.Thread(
+            target=generate_in_background,
+            args=(report.id, request.user.id),
+            daemon=True
+        )
+        thread.start()
+
+        return success_response({
+            'report_id': report.id,
+            'status': 'processing',
+            'progress': 0,
+            'message': 'Report generation started'
+        }, status_code=status.HTTP_202_ACCEPTED)
+
+    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated], url_path='patient_reports/(?P<report_id>[^/.]+)/status')
+    def report_status(self, request, report_id=None):
+        """
+        Get the status and progress of a report generation.
+        """
+        from .models import PatientReport
+
+        try:
+            report = PatientReport.objects.get(id=report_id, user=request.user)
+        except PatientReport.DoesNotExist:
+            return error_response("Report not found", status.HTTP_404_NOT_FOUND)
+
+        response_data = {
+            'report_id': report.id,
+            'report_type': report.report_type,
+            'status': report.status,
+            'progress': report.progress,
+        }
+
+        if report.status == 'failed':
+            response_data['error_message'] = report.error_message
+
+        if report.status == 'completed':
+            # Include full report data
+            response_data.update({
+                'report_date': report.report_date.isoformat(),
+                'period_start': report.period_start.isoformat(),
+                'period_end': report.period_end.isoformat(),
+                'overall_health_score': report.overall_health_score,
+                'adherence_score': report.adherence_score,
+                'sleep_score': report.sleep_score,
+                'vitals_score': report.vitals_score,
+                'adherence_percentage': report.adherence_percentage,
+                'ai_doctor_summary': report.ai_doctor_summary,
+                'ai_patient_summary': report.ai_patient_summary,
+            })
+
+        return success_response(response_data)
+
     @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated], url_path='patient_reports/(?P<report_id>[^/.]+)/generate_pdf')
     def generate_report_pdf(self, request, report_id=None):
         """
@@ -773,4 +920,245 @@ class ContactViewSet(viewsets.ViewSet):
             })
         except Contact.DoesNotExist:
             return error_response("Contact not found", status.HTTP_404_NOT_FOUND)
+
+
+class DeviceContactViewSet(viewsets.ViewSet):
+    """
+    ViewSet for managing device contacts synced from iOS.
+    Allows the AI agent to search contacts by name.
+    """
+    authentication_classes = [SimpleTokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def list(self, request):
+        """Get all device contacts for the user"""
+        from .models import DeviceContact
+        queryset = DeviceContact.objects.filter(user=request.user)
+        data = [{
+            'id': c.id,
+            'device_id': c.device_id,
+            'full_name': c.full_name,
+            'given_name': c.given_name,
+            'family_name': c.family_name,
+            'nickname': c.nickname,
+            'organization': c.organization,
+            'primary_phone': c.primary_phone,
+            'primary_email': c.primary_email,
+            'phone_numbers': c.phone_numbers,
+            'emails': c.emails,
+        } for c in queryset]
+        return success_response(data)
+
+    @action(detail=False, methods=['post'])
+    def sync(self, request):
+        """
+        Bulk sync device contacts from iOS.
+        Creates new contacts and updates existing ones.
+        """
+        from .models import DeviceContact
+        contacts_data = request.data.get('contacts', [])
+
+        if not contacts_data:
+            return error_response("No contacts provided", status.HTTP_400_BAD_REQUEST)
+
+        created = 0
+        updated = 0
+
+        for contact_data in contacts_data:
+            device_id = contact_data.get('id')
+            if not device_id:
+                continue
+
+            defaults = {
+                'given_name': contact_data.get('givenName', ''),
+                'family_name': contact_data.get('familyName', ''),
+                'full_name': contact_data.get('fullName', ''),
+                'nickname': contact_data.get('nickname'),
+                'organization': contact_data.get('organization'),
+                'phone_numbers': contact_data.get('phoneNumbers', []),
+                'emails': contact_data.get('emails', []),
+            }
+
+            obj, was_created = DeviceContact.objects.update_or_create(
+                user=request.user,
+                device_id=device_id,
+                defaults=defaults
+            )
+
+            if was_created:
+                created += 1
+            else:
+                updated += 1
+
+        return success_response({
+            'created': created,
+            'updated': updated,
+            'total': created + updated,
+        }, f"Synced {created + updated} contacts")
+
+    @action(detail=False, methods=['get'])
+    def search(self, request):
+        """
+        Search device contacts by name.
+        Used by the AI agent to find contacts.
+        """
+        from .models import DeviceContact
+        from django.db.models import Q
+
+        query = request.query_params.get('q', '').strip()
+        if not query:
+            return error_response("Search query required", status.HTTP_400_BAD_REQUEST)
+
+        queryset = DeviceContact.objects.filter(
+            user=request.user
+        ).filter(
+            Q(full_name__icontains=query) |
+            Q(given_name__icontains=query) |
+            Q(family_name__icontains=query) |
+            Q(nickname__icontains=query)
+        )[:10]  # Limit to 10 results
+
+        data = [{
+            'id': c.id,
+            'full_name': c.full_name,
+            'primary_phone': c.primary_phone,
+            'primary_email': c.primary_email,
+        } for c in queryset]
+
+        return success_response(data)
+
+
+class CommunicationRequestViewSet(viewsets.ViewSet):
+    """
+    ViewSet for managing communication requests from the AI agent.
+    Agent creates requests, Flutter app executes them.
+    """
+    authentication_classes = [SimpleTokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def list(self, request):
+        """Get pending communication requests for the user"""
+        from .models import CommunicationRequest
+        from django.utils import timezone
+
+        # Only get pending, non-expired requests
+        queryset = CommunicationRequest.objects.filter(
+            user=request.user,
+            status='pending',
+            expires_at__gt=timezone.now()
+        )
+
+        data = [{
+            'id': r.id,
+            'request_type': r.request_type,
+            'contact_name': r.contact_name,
+            'phone_number': r.phone_number,
+            'email': r.email,
+            'message_body': r.message_body,
+            'agent_reason': r.agent_reason,
+            'created_at': r.created_at.isoformat(),
+            'expires_at': r.expires_at.isoformat(),
+        } for r in queryset]
+
+        return success_response(data)
+
+    def create(self, request):
+        """
+        Create a communication request (called by AI agent).
+        Uses contacts added in the Kindura app (family, caregivers, doctors).
+        """
+        from .models import CommunicationRequest, Contact
+        from django.utils import timezone
+
+        request_type = request.data.get('request_type')
+        contact_name = request.data.get('contact_name')
+
+        if not request_type or not contact_name:
+            return error_response("request_type and contact_name are required", status.HTTP_400_BAD_REQUEST)
+
+        # Try to find contact in Kindura app contacts
+        phone_number = request.data.get('phone_number')
+        email = request.data.get('email')
+
+        if not phone_number and not email:
+            # Search in Kindura contacts (family, caregivers, doctors, etc.)
+            from django.db.models import Q
+            contact = Contact.objects.filter(
+                user=request.user,
+                is_active=True
+            ).filter(
+                Q(name__icontains=contact_name)
+            ).first()
+
+            if contact:
+                phone_number = contact.phone_number
+                email = contact.email
+                contact_name = contact.name  # Use exact name from contact
+
+        if not phone_number and not email:
+            return error_response(
+                f"Contact '{contact_name}' not found in your Kindura contacts. "
+                "Please add them as a family member, caregiver, or emergency contact first.",
+                status.HTTP_404_NOT_FOUND
+            )
+
+        # Create the request
+        comm_request = CommunicationRequest.objects.create(
+            user=request.user,
+            request_type=request_type,
+            contact_name=contact_name,
+            phone_number=phone_number,
+            email=email,
+            message_body=request.data.get('message_body'),
+            agent_reason=request.data.get('agent_reason'),
+            conversation_id=request.data.get('conversation_id'),
+            expires_at=timezone.now() + timezone.timedelta(minutes=5)
+        )
+
+        return success_response({
+            'id': comm_request.id,
+            'request_type': comm_request.request_type,
+            'contact_name': comm_request.contact_name,
+            'phone_number': comm_request.phone_number,
+            'message_body': comm_request.message_body,
+            'expires_at': comm_request.expires_at.isoformat(),
+        }, "Communication request created", status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['post'])
+    def approve(self, request, pk=None):
+        """Mark request as approved (user confirmed)"""
+        from .models import CommunicationRequest
+        try:
+            comm_request = CommunicationRequest.objects.get(id=pk, user=request.user)
+            comm_request.status = 'approved'
+            comm_request.save()
+            return success_response({'status': 'approved'})
+        except CommunicationRequest.DoesNotExist:
+            return error_response("Request not found", status.HTTP_404_NOT_FOUND)
+
+    @action(detail=True, methods=['post'])
+    def reject(self, request, pk=None):
+        """Mark request as rejected (user declined)"""
+        from .models import CommunicationRequest
+        try:
+            comm_request = CommunicationRequest.objects.get(id=pk, user=request.user)
+            comm_request.status = 'rejected'
+            comm_request.save()
+            return success_response({'status': 'rejected'})
+        except CommunicationRequest.DoesNotExist:
+            return error_response("Request not found", status.HTTP_404_NOT_FOUND)
+
+    @action(detail=True, methods=['post'])
+    def complete(self, request, pk=None):
+        """Mark request as completed (action executed)"""
+        from .models import CommunicationRequest
+        from django.utils import timezone
+        try:
+            comm_request = CommunicationRequest.objects.get(id=pk, user=request.user)
+            comm_request.status = 'completed'
+            comm_request.completed_at = timezone.now()
+            comm_request.save()
+            return success_response({'status': 'completed'})
+        except CommunicationRequest.DoesNotExist:
+            return error_response("Request not found", status.HTTP_404_NOT_FOUND)
 

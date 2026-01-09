@@ -112,3 +112,131 @@ class ContactsAPI:
             lines.append(f"- {name} ({relationship}): {phone}")
 
         return "\n".join(lines)
+
+    async def search_contact(self, name: str) -> Optional[Dict[str, Any]]:
+        """
+        Search for a contact by name.
+        Returns the first matching contact.
+        """
+        contacts = await self.get_contacts()
+        if not contacts:
+            return None
+
+        name_lower = name.lower()
+        for contact in contacts:
+            contact_name = contact.get('name', '').lower()
+            if name_lower in contact_name or contact_name in name_lower:
+                return contact
+
+        return None
+
+    async def create_call_request(
+        self,
+        contact_name: str,
+        call_type: str = "facetime_video",
+        reason: str = ""
+    ) -> Dict[str, Any]:
+        """
+        Create a request to call a contact.
+        The Flutter app will poll for this request and execute it.
+
+        Args:
+            contact_name: Name of the contact to call
+            call_type: 'call', 'facetime_video', or 'facetime_audio'
+            reason: Reason for the call (shown to user)
+
+        Returns:
+            Dict with status and message
+        """
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.post(
+                    f"{self.base_url}/communication-requests/",
+                    headers={"Authorization": f"Token {self.auth_token}"},
+                    json={
+                        "request_type": call_type,
+                        "contact_name": contact_name,
+                        "agent_reason": reason,
+                    }
+                )
+
+                if response.status_code == 201:
+                    data = response.json()
+                    result = data.get('result', {})
+                    return {
+                        "success": True,
+                        "message": f"Call request to {result.get('contact_name')} created. The app will prompt you to confirm.",
+                        "contact_name": result.get('contact_name'),
+                        "phone_number": result.get('phone_number'),
+                    }
+                elif response.status_code == 404:
+                    return {
+                        "success": False,
+                        "message": f"Contact '{contact_name}' not found in your Kindura contacts. "
+                                   "Please add them as a family member, caregiver, or emergency contact first."
+                    }
+                else:
+                    data = response.json()
+                    return {
+                        "success": False,
+                        "message": data.get('message', 'Failed to create call request')
+                    }
+        except Exception as e:
+            print(f"❌ Error creating call request: {e}")
+            return {"success": False, "message": f"Error: {str(e)}"}
+
+    async def create_message_request(
+        self,
+        contact_name: str,
+        message: str,
+        reason: str = ""
+    ) -> Dict[str, Any]:
+        """
+        Create a request to send a message to a contact.
+        The Flutter app will poll for this request and open Messages with the content.
+
+        Args:
+            contact_name: Name of the contact to message
+            message: The message content
+            reason: Reason for the message (shown to user)
+
+        Returns:
+            Dict with status and message
+        """
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.post(
+                    f"{self.base_url}/communication-requests/",
+                    headers={"Authorization": f"Token {self.auth_token}"},
+                    json={
+                        "request_type": "message",
+                        "contact_name": contact_name,
+                        "message_body": message,
+                        "agent_reason": reason,
+                    }
+                )
+
+                if response.status_code == 201:
+                    data = response.json()
+                    result = data.get('result', {})
+                    return {
+                        "success": True,
+                        "message": f"Message to {result.get('contact_name')} prepared. The app will open Messages for you to send.",
+                        "contact_name": result.get('contact_name'),
+                        "phone_number": result.get('phone_number'),
+                    }
+                elif response.status_code == 404:
+                    return {
+                        "success": False,
+                        "message": f"Contact '{contact_name}' not found in your Kindura contacts. "
+                                   "Please add them as a family member, caregiver, or emergency contact first."
+                    }
+                else:
+                    data = response.json()
+                    return {
+                        "success": False,
+                        "message": data.get('message', 'Failed to create message request')
+                    }
+        except Exception as e:
+            print(f"❌ Error creating message request: {e}")
+            return {"success": False, "message": f"Error: {str(e)}"}

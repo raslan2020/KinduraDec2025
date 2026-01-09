@@ -11,6 +11,7 @@ import 'package:kindura_ai/res/assets/image_constant.dart';
 import 'package:kindura_ai/res/colors/app_color.dart';
 import 'package:kindura_ai/screens/bottom_navigation/bottom_navigation_controller.dart';
 import 'package:kindura_ai/screens/home/home_controller.dart';
+import 'package:kindura_ai/services/report_generation_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class KinduraReportsScreen extends StatefulWidget {
@@ -90,8 +91,12 @@ class _KinduraReportsScreenState extends State<KinduraReportsScreen>
           ),
           ElevatedButton(
             onPressed: () {
+              // Close dialog immediately using Get.back()
               Get.back();
-              _triggerReportGeneration();
+              // Trigger generation in next frame
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                _triggerReportGeneration();
+              });
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColor.primaryColor,
@@ -100,46 +105,49 @@ class _KinduraReportsScreenState extends State<KinduraReportsScreen>
           ),
         ],
       ),
+      barrierDismissible: true,
     );
   }
 
   Future<void> _triggerReportGeneration() async {
-    Get.dialog(
-      Center(child: LoadingIndicator()),
-      barrierDismissible: false,
-    );
-
-    try {
-      final response = await _apiService.postApi(
-        {'type': selectedType.value},
-        '${AppUrl.patientReportsUrl}generate/',
-      );
-
-      Get.back(); // Close loading dialog
-
-      if (response['status'] == true) {
-        Get.snackbar(
-          'Success',
-          'Report generated successfully',
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: AppColor.success.withOpacity(0.9),
-          colorText: Colors.white,
-        );
-        loadReports(); // Reload to show new report
-      } else {
-        Get.snackbar(
-          'Error',
-          response['message'] ?? 'Failed to generate report',
-          snackPosition: SnackPosition.BOTTOM,
-        );
-      }
-    } catch (e) {
-      Get.back();
-      print('Error generating report: $e');
+    // Use background service for seamless generation
+    if (!Get.isRegistered<ReportGenerationService>()) {
       Get.snackbar(
         'Error',
-        'Failed to generate report: $e',
+        'Report generation service not available',
         snackPosition: SnackPosition.BOTTOM,
+      );
+      return;
+    }
+
+    final service = Get.find<ReportGenerationService>();
+
+    // Check if already generating
+    if (service.isGenerating.value) {
+      Get.snackbar(
+        'In Progress',
+        'A report is already being generated. Please wait.',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      return;
+    }
+
+    // Set up completion callback to refresh reports
+    service.onReportCompleted = (reportId, reportType) {
+      if (selectedType.value == reportType) {
+        loadReports();
+      }
+    };
+
+    // Start background generation
+    final reportId = await service.generateReport(selectedType.value);
+
+    if (reportId != null) {
+      Get.snackbar(
+        'Generating Report',
+        'Your ${selectedType.value} report is being generated in the background.',
+        snackPosition: SnackPosition.BOTTOM,
+        duration: const Duration(seconds: 3),
       );
     }
   }
@@ -161,7 +169,13 @@ class _KinduraReportsScreenState extends State<KinduraReportsScreen>
         elevation: 0,
         leading: IconButton(
           icon: Icon(Icons.arrow_back, color: textColor),
-          onPressed: () => Get.back(),
+          onPressed: () {
+            if (Navigator.of(context).canPop()) {
+              Navigator.of(context).pop();
+            } else {
+              Get.back();
+            }
+          },
         ),
         actions: [
           IconButton(
@@ -182,24 +196,29 @@ class _KinduraReportsScreenState extends State<KinduraReportsScreen>
           ],
         ),
       ),
-      body: Obx(() {
-        if (status.value == Status.LOADING) {
-          return Center(child: LoadingIndicator());
-        }
+      body: Stack(
+        children: [
+          Obx(() {
+            if (status.value == Status.LOADING) {
+              return Center(child: LoadingIndicator());
+            }
 
-        if (reports.isEmpty) {
-          return _buildEmptyState();
-        }
+            if (reports.isEmpty) {
+              return _buildEmptyState();
+            }
 
-        return RefreshIndicator(
-          onRefresh: loadReports,
-          child: ListView.builder(
-            padding: EdgeInsets.all(16.w),
-            itemCount: reports.length,
-            itemBuilder: (context, index) => _buildReportCard(reports[index]),
-          ),
-        );
-      }),
+            return RefreshIndicator(
+              onRefresh: loadReports,
+              child: ListView.builder(
+                padding: EdgeInsets.all(16.w),
+                itemCount: reports.length,
+                itemBuilder: (context, index) => _buildReportCard(reports[index]),
+              ),
+            );
+          }),
+          // Note: ReportProgressOverlay is now shown globally in bottom_navigation_screen
+        ],
+      ),
       bottomNavigationBar: _buildBottomNavBar(context),
     );
   }
@@ -315,9 +334,15 @@ class _KinduraReportsScreenState extends State<KinduraReportsScreen>
   ) {
     return GestureDetector(
       onTap: () {
-        Get.back();
-        final navController = Get.find<BottomNavController>();
-        navController.changeTabIndex(index);
+        // Navigate back first
+        if (Navigator.of(context).canPop()) {
+          Navigator.of(context).pop();
+        }
+        // Change tab if controller is available
+        if (Get.isRegistered<BottomNavController>()) {
+          final navController = Get.find<BottomNavController>();
+          navController.changeTabIndex(index);
+        }
       },
       behavior: HitTestBehavior.opaque,
       child: Container(

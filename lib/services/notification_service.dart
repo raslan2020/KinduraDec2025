@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:kindura_ai/models/medication/medication_models.dart';
 import 'package:kindura_ai/screens/medication/medication_controller.dart';
+import 'package:kindura_ai/services/watch_vitals_service.dart';
 import 'package:get/get.dart';
 import 'dart:async';
 
@@ -13,6 +14,101 @@ class NotificationService extends GetxService {
   Future<void> onInit() async {
     super.onInit();
     print('🔔 Notification Service initialized');
+
+    // Setup Watch response handler for medication reminders
+    _setupWatchResponseHandler();
+  }
+
+  /// Setup handler for Apple Watch medication reminder responses
+  void _setupWatchResponseHandler() {
+    try {
+      final watchService = Get.find<WatchVitalsService>();
+      watchService.onMedicationReminderResponse = _handleWatchMedicationResponse;
+      print('🔔 Watch medication response handler registered');
+    } catch (e) {
+      print('🔔 WatchVitalsService not available: $e');
+    }
+  }
+
+  /// Handle medication reminder response from Apple Watch
+  void _handleWatchMedicationResponse(Map<String, dynamic> response) {
+    final action = response['action'] as String?;
+    final medicationId = response['medication_id'] as String?;
+    final scheduledTimeStr = response['scheduled_time'] as String?;
+    final takenAtStr = response['taken_at'] as String?;
+
+    print('💊 Watch medication response: action=$action, medicationId=$medicationId');
+
+    if (medicationId == null || scheduledTimeStr == null || action == null) {
+      print('💊 Invalid Watch medication response - missing required fields');
+      return;
+    }
+
+    final scheduledTime = DateTime.parse(scheduledTimeStr);
+    final takenAt = takenAtStr != null ? DateTime.parse(takenAtStr) : null;
+
+    try {
+      final medicationController = Get.find<MedicationController>();
+
+      switch (action) {
+        case 'taken':
+          medicationController.recordDoseTaken(
+            medicationId: medicationId,
+            scheduledAt: scheduledTime,
+            takenAt: takenAt,
+            method: 'watch',
+          );
+          Get.snackbar(
+            'Medication Taken',
+            'Dose recorded from Apple Watch',
+            snackPosition: SnackPosition.BOTTOM,
+            duration: const Duration(seconds: 3),
+            backgroundColor: Colors.green.withOpacity(0.8),
+            colorText: Colors.white,
+          );
+          break;
+
+        case 'skipped':
+          medicationController.recordDoseSkipped(
+            medicationId: medicationId,
+            scheduledAt: scheduledTime,
+            reason: 'Skipped from Apple Watch',
+          );
+          Get.snackbar(
+            'Medication Skipped',
+            'Dose skipped from Apple Watch',
+            snackPosition: SnackPosition.BOTTOM,
+            duration: const Duration(seconds: 3),
+          );
+          break;
+
+        case 'snoozed':
+          // Find the medication and reschedule
+          final medication = medicationController.medications
+              .firstWhereOrNull((m) => m.id == medicationId);
+          if (medication != null) {
+            final snoozeTime = DateTime.now().add(const Duration(minutes: 15));
+            _scheduleReminder(
+              medication,
+              snoozeTime,
+              isFollowUp: true,
+              followUpNumber: 0,
+            );
+          }
+          Get.snackbar(
+            'Reminder Snoozed',
+            'You\'ll be reminded again in 15 minutes',
+            snackPosition: SnackPosition.BOTTOM,
+            duration: const Duration(seconds: 3),
+          );
+          break;
+
+        default:
+          print('💊 Unknown Watch action: $action');
+      }
+    } catch (e) {
+      print('💊 Error handling Watch medication response: $e');
+    }
   }
 
   @override
@@ -214,6 +310,15 @@ class NotificationService extends GetxService {
     // Play notification sound (would be replaced with actual notification sound)
     print('🔔 Medication reminder: ${medication.displayName} at ${scheduledTime.toIso8601String()}');
 
+    // Also send reminder to Apple Watch
+    _sendReminderToWatch(
+      medication: medication,
+      scheduledTime: scheduledTime,
+      isFollowUp: isFollowUp,
+      followUpNumber: followUpNumber,
+      escalateToCaregiver: escalateToCaregiver,
+    );
+
     // Schedule caregiver notification if needed
     if (escalateToCaregiver && medication.schedule.caregiverContactId != null) {
       Timer(Duration(minutes: 2), () {
@@ -222,9 +327,46 @@ class NotificationService extends GetxService {
     }
   }
 
+  /// Send medication reminder to Apple Watch via WatchVitalsService
+  Future<void> _sendReminderToWatch({
+    required Medication medication,
+    required DateTime scheduledTime,
+    required bool isFollowUp,
+    int? followUpNumber,
+    bool escalateToCaregiver = false,
+  }) async {
+    try {
+      final watchService = Get.find<WatchVitalsService>();
+
+      // Check if Watch is paired before sending
+      final isPaired = await watchService.isWatchPaired();
+      if (!isPaired) {
+        print('💊 Apple Watch not paired - skipping Watch reminder');
+        return;
+      }
+
+      await watchService.sendMedicationReminder(
+        medicationId: medication.id,
+        medicationName: medication.displayName,
+        dosage: medication.strengthDisplay,
+        form: medication.form,
+        scheduledTime: scheduledTime,
+        instructions: medication.instructionsText,
+        isFollowUp: isFollowUp,
+        followUpNumber: followUpNumber,
+        requiresEscalation: escalateToCaregiver,
+      );
+
+      print('💊 Medication reminder sent to Apple Watch: ${medication.displayName}');
+    } catch (e) {
+      print('💊 Failed to send reminder to Watch: $e');
+      // Don't throw - Watch notification is optional
+    }
+  }
+
   void _showCaregiverNotification(Medication medication, DateTime scheduledTime) {
     print('👨‍⚕️ Caregiver alert: Patient may have missed ${medication.displayName}');
-    
+
     // In a real implementation, this would send notifications to caregiver's device
     // For now, just log it
   }

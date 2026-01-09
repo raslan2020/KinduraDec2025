@@ -998,6 +998,70 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   )),
               SizedBox(height: 24.h),
 
+              // Kindura AI Permissions Section
+              Text(
+                'Kindura AI Permissions',
+                style: TextStyle(
+                  fontSize: 16.sp,
+                  fontWeight: FontWeight.w600,
+                  color: Theme.of(context).textTheme.bodyLarge?.color,
+                ),
+              ),
+              SizedBox(height: 8.h),
+              Text(
+                'Control what actions Kindura can perform',
+                style: TextStyle(
+                  fontSize: 12.sp,
+                  color: Theme.of(context).textTheme.bodySmall?.color,
+                ),
+              ),
+              SizedBox(height: 12.h),
+              Obx(() => SwitchListTile(
+                    title: Text('Allow Medication Updates',
+                        style: TextStyle(
+                            color: Theme.of(context).textTheme.bodyLarge?.color,
+                            fontSize: 14.sp,
+                            fontWeight: FontWeight.w500)),
+                    subtitle: Text(
+                        'Let Kindura mark medications as taken when you tell her',
+                        style: TextStyle(
+                            color: Theme.of(context).textTheme.bodySmall?.color,
+                            fontSize: 12.sp)),
+                    value: profileController.allowAgentMedicationUpdates.value,
+                    onChanged: (value) {
+                      profileController.allowAgentMedicationUpdates.value = value;
+                    },
+                    activeColor: AppColor.primaryColor,
+                    contentPadding: EdgeInsets.zero,
+                  )),
+              SizedBox(height: 8.h),
+              Container(
+                padding: EdgeInsets.all(12.w),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(8.w),
+                  border: Border.all(color: Colors.blue.shade200),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.info_outline,
+                        color: Colors.blue.shade700, size: 20.sp),
+                    SizedBox(width: 8.w),
+                    Expanded(
+                      child: Text(
+                        'When enabled, you can say "I took my medication" and Kindura will update your tracking. When disabled, she will remind you to do it manually in the app.',
+                        style: TextStyle(
+                          fontSize: 11.sp,
+                          color: Colors.blue.shade900,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(height: 24.h),
+
               // Caregiver Notifications Section
               Text(
                 'Caregiver Notifications',

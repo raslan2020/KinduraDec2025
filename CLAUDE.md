@@ -375,4 +375,7 @@ Purpose:
 - Lower embedding size for vector DB  
 - Increase precision in retrieval and RAG operations
 
+
+## Apple Watch Native Requirement:
+- The Apple Watch application must be developed as a fully native watchOS app written in Swift and built exclusively with Xcode, using only Apple-provided frameworks such as WatchKit, SwiftUI, HealthKit, and WatchConnectivity. The Watch app must exist as a dedicated watchOS target within the Xcode project, run natively on the Apple Watch (not via Flutter, React Native, WebViews, JavaScript runtimes, or any cross-platform abstraction), and execute all Watch UI, logic, and sensor handling directly on watchOS. Any communication with the iPhone must use WatchConnectivity, and any Watch sensor or health data (if used) must be collected directly on the Watch via native APIs rather than relayed indirectly from iOS. The Watch app must be packaged and distributed through TestFlight as part of the iOS app and appear as an installable Watch app in the iOS Watch app. Any deviation from native Swift, Xcode, or Apple watchOS frameworks will be considered non-compliant and rejected.
 ---

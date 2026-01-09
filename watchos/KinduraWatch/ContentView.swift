@@ -27,6 +27,13 @@ struct ContentView: View {
         .onAppear {
             healthManager.requestAuthorization()
         }
+        // Present medication reminder as sheet when received from iPhone
+        .sheet(isPresented: $healthManager.showMedicationReminderAlert) {
+            if let reminder = healthManager.currentMedicationReminder {
+                MedicationReminderView(reminder: reminder)
+                    .environmentObject(healthManager)
+            }
+        }
     }
 }
 

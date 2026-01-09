@@ -67,7 +67,13 @@ class User(AbstractUser):
     address = models.TextField(blank=True, null=True)
     terms_and_conditions = models.BooleanField(default=False)
     unit_system = models.CharField(max_length=2, choices=UNIT_SYSTEM_CHOICES, default='US', help_text='Preferred unit system for lab values and measurements')
-    
+
+    # Agent permissions
+    allow_agent_medication_updates = models.BooleanField(
+        default=False,
+        help_text='Allow Kindura AI to mark medications as taken/missed via voice commands'
+    )
+
     # Override username field to use email
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = ['username']
@@ -246,6 +252,17 @@ class PatientReport(models.Model):
     sleep_score = models.IntegerField(default=0)
     vitals_score = models.IntegerField(default=0)
 
+    # Generation Status & Progress
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('processing', 'Processing'),
+        ('completed', 'Completed'),
+        ('failed', 'Failed'),
+    ]
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    progress = models.IntegerField(default=0)  # 0-100 percentage
+    error_message = models.TextField(blank=True, null=True)
+
     # Metadata
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -396,3 +413,122 @@ class PatientObservation(models.Model):
 
     def __str__(self):
         return f"{self.user.email} - {self.observation_type}: {self.title}"
+
+
+class DeviceContact(models.Model):
+    """
+    Contacts synced from user's device (iOS Contacts).
+    Allows the AI agent to search and reference device contacts.
+    """
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='device_contacts')
+    device_id = models.CharField(max_length=100)  # iOS contact identifier
+
+    # Name fields
+    given_name = models.CharField(max_length=100, blank=True)
+    family_name = models.CharField(max_length=100, blank=True)
+    full_name = models.CharField(max_length=200)
+    nickname = models.CharField(max_length=100, blank=True, null=True)
+    organization = models.CharField(max_length=200, blank=True, null=True)
+
+    # Contact info (stored as JSON for multiple numbers/emails)
+    phone_numbers = models.JSONField(default=list)  # [{"label": "mobile", "number": "+1234567890"}, ...]
+    emails = models.JSONField(default=list)  # [{"label": "home", "email": "test@test.com"}, ...]
+
+    # Primary contact methods (for quick access)
+    primary_phone = models.CharField(max_length=20, blank=True, null=True)
+    primary_email = models.EmailField(blank=True, null=True)
+
+    # Sync metadata
+    last_synced_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'device_contacts'
+        unique_together = ['user', 'device_id']
+        ordering = ['full_name']
+        indexes = [
+            models.Index(fields=['user', 'full_name']),
+        ]
+
+    def __str__(self):
+        return f"{self.full_name} ({self.user.email})"
+
+    def save(self, *args, **kwargs):
+        # Auto-extract primary phone and email
+        if self.phone_numbers and not self.primary_phone:
+            # Prefer mobile numbers
+            for phone in self.phone_numbers:
+                label = phone.get('label', '').lower()
+                if 'mobile' in label or 'cell' in label:
+                    self.primary_phone = phone.get('number')
+                    break
+            if not self.primary_phone and self.phone_numbers:
+                self.primary_phone = self.phone_numbers[0].get('number')
+
+        if self.emails and not self.primary_email:
+            self.primary_email = self.emails[0].get('email')
+
+        super().save(*args, **kwargs)
+
+
+class CommunicationRequest(models.Model):
+    """
+    Communication requests from the AI agent.
+    Agent creates these requests, and the Flutter app polls and executes them.
+    """
+    REQUEST_TYPE_CHOICES = [
+        ('call', 'Phone Call'),
+        ('facetime_video', 'FaceTime Video'),
+        ('facetime_audio', 'FaceTime Audio'),
+        ('message', 'Text Message'),
+    ]
+
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('shown', 'Shown to User'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+        ('completed', 'Completed'),
+        ('expired', 'Expired'),
+    ]
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='communication_requests')
+    request_type = models.CharField(max_length=20, choices=REQUEST_TYPE_CHOICES)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+
+    # Target contact
+    contact_name = models.CharField(max_length=200)  # Name of the contact
+    phone_number = models.CharField(max_length=20, blank=True, null=True)
+    email = models.EmailField(blank=True, null=True)
+
+    # For messages
+    message_body = models.TextField(blank=True, null=True)
+
+    # Context from agent
+    agent_reason = models.TextField(blank=True, null=True)  # Why the agent is making this request
+    conversation_id = models.CharField(max_length=100, blank=True, null=True)
+
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()  # Requests expire after some time
+    completed_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        db_table = 'communication_requests'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', 'status', 'created_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.request_type} to {self.contact_name} ({self.status})"
+
+    def save(self, *args, **kwargs):
+        # Set expiration to 5 minutes from creation if not set
+        if not self.expires_at:
+            self.expires_at = timezone.now() + timezone.timedelta(minutes=5)
+        super().save(*args, **kwargs)
+
+    @property
+    def is_expired(self):
+        return timezone.now() > self.expires_at

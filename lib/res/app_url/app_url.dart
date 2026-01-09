@@ -5,7 +5,7 @@ class AppUrl {
   // Base URLs for different environments
   // Note: Use your Mac's local IP for physical device testing
   // To find IP: run `ipconfig getifaddr en0` in terminal
-  static const String localBaseUrl = "http://192.168.0.115:8000/api";
+  static const String localBaseUrl = "http://192.168.8.181:8000/api";
   static const String productionBaseUrl = "http://65.109.75.25:8000/api";
 
   // Dynamic base URL based on environment
@@ -19,6 +19,8 @@ class AppUrl {
   static String get verifyResetCodeUrl => "${baseUrl}/users/verify_reset_code/";
   static String get resetPasswordUrl => "${baseUrl}/users/reset_password/";
   static String get patientReportsUrl => "${baseUrl}/users/patient_reports/";
+  static String get generateReportAsyncUrl => "${baseUrl}/users/patient_reports/generate_async/";
+  static String reportStatusUrl(int reportId) => "${baseUrl}/users/patient_reports/$reportId/status/";
   static String get healthProfileUrl => "${baseUrl}/health-profile/profile/";
   static String get pdfUploadUrl => "${baseUrl}/courses/with_medicines_and_schedules/";
   static String get courseListUrl => "${baseUrl}/courses/get_current_course/";
@@ -67,4 +69,10 @@ class AppUrl {
   static String markInsightReadUrl(String insightId) => "${baseUrl}/health-insights/$insightId/read/";
   static String dismissInsightUrl(String insightId) => "${baseUrl}/health-insights/$insightId/dismiss/";
   static String regenerateReportInsightsUrl(String reportId) => "${baseUrl}/health-insights/report/$reportId/regenerate/";
+
+  // Communication Requests URLs (for agent-initiated calls/messages)
+  static String get communicationRequestsUrl => "${baseUrl}/communication-requests/";
+  static String communicationRequestApproveUrl(int requestId) => "${baseUrl}/communication-requests/$requestId/approve/";
+  static String communicationRequestRejectUrl(int requestId) => "${baseUrl}/communication-requests/$requestId/reject/";
+  static String communicationRequestCompleteUrl(int requestId) => "${baseUrl}/communication-requests/$requestId/complete/";
 }

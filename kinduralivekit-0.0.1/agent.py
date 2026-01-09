@@ -41,27 +41,171 @@ _observations_service = None
 _biomarkers_service = None
 _base_url = None
 _auth_token = None
+_allow_agent_medication_updates = False  # User permission to update medications
+_medications_cache = []  # Cache of user's medications for lookup
 
 
-@function_tool(description="Called when patient asks to mark medication as taken or update medication schedule. This action must be done by the user or caregiver in the app, not by the voice assistant.")
-async def mark_medication_taken(medication_name: str, notes: str = "", taken_on_time: bool = False, delay_minutes: int = 0) -> str:
-    """Decline marking medication - must be done in app by user or caregiver"""
-    print(f"🚫 User requested to mark {medication_name} as taken - declining (must be done in app)")
-    return f"I'm sorry, but I'm not able to mark your medications as taken or update your medication schedule. For accuracy and safety, this needs to be done by you or your caregiver directly in the Kindura app. You can go to the Medications tab and tap on the medication to mark it as taken. Would you like me to help you with something else?"
+def _find_medication_by_name(medication_name: str) -> dict:
+    """Find medication in cache by name (fuzzy matching)"""
+    global _medications_cache
+    if not _medications_cache:
+        return None
+
+    medication_name_lower = medication_name.lower().strip()
+
+    # First try exact match
+    for med in _medications_cache:
+        drug_name = med.get('drugName', '').lower()
+        if drug_name == medication_name_lower:
+            return med
+
+    # Try partial match
+    for med in _medications_cache:
+        drug_name = med.get('drugName', '').lower()
+        if medication_name_lower in drug_name or drug_name in medication_name_lower:
+            return med
+
+    return None
 
 
-@function_tool(description="Called when patient says they missed or skipped their medication. This action must be recorded by the user or caregiver in the app, not by the voice assistant.")
+@function_tool(description="Called when patient says they took their medication. If enabled in settings, this will mark the medication as taken in the database. Otherwise directs user to update manually in the app.")
+async def mark_medication_taken(medication_name: str, notes: str = "", taken_on_time: bool = True, delay_minutes: int = 0) -> str:
+    """Mark medication as taken - checks user permission first"""
+    global _allow_agent_medication_updates, _medication_service, _medications_cache
+
+    # Check if user has granted permission
+    if not _allow_agent_medication_updates:
+        print(f"🚫 User requested to mark {medication_name} as taken - declining (permission not granted)")
+        return f"I'm not currently allowed to update your medication records. You can enable this feature in Settings under 'Kindura AI Permissions'. For now, please mark your {medication_name} as taken in the Medications tab of the app. Would you like me to help with something else?"
+
+    # Find the medication
+    med = _find_medication_by_name(medication_name)
+    if not med:
+        print(f"⚠️ Could not find medication: {medication_name}")
+        return f"I couldn't find a medication called {medication_name} in your records. Please check the medication name and try again, or mark it manually in the app."
+
+    medication_id = med.get('id')
+    drug_name = med.get('drugName', medication_name)
+
+    # Determine scheduled time (use first scheduled time for today as fallback)
+    from datetime import datetime, timedelta
+    now = datetime.now()
+    scheduled_at = now  # Default to now if no schedule found
+
+    schedule = med.get('schedule', {})
+    times = schedule.get('times', [])
+    if times:
+        # Try to find the most recent scheduled time
+        for time_str in sorted(times, reverse=True):
+            try:
+                parts = time_str.split(':')
+                hour = int(parts[0])
+                minute = int(parts[1]) if len(parts) > 1 else 0
+                sched_dt = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+                if sched_dt <= now:
+                    scheduled_at = sched_dt
+                    break
+            except:
+                pass
+
+    # Calculate if taken late
+    is_late = delay_minutes > 0 or not taken_on_time
+    taken_at = now if not delay_minutes else now - timedelta(minutes=delay_minutes)
+
+    # Record the dose
+    try:
+        if _medication_service:
+            result = await _medication_service.record_dose_taken(
+                medication_id=str(medication_id),
+                scheduled_at=scheduled_at,
+                taken_at=taken_at,
+                notes=notes if notes else None,
+                is_late=is_late
+            )
+
+            if result:
+                print(f"✅ Successfully marked {drug_name} as taken via voice")
+                time_status = "on time" if taken_on_time and delay_minutes == 0 else "late"
+                return f"Great! I've recorded that you took your {drug_name} {time_status}. Keep up the good work with your medication schedule!"
+            else:
+                print(f"❌ Failed to record dose for {drug_name}")
+                return f"I had trouble recording your {drug_name} dose. Please try marking it in the app, or let me know if you'd like to try again."
+        else:
+            print("❌ Medication service not initialized")
+            return f"I'm having trouble connecting to update your records. Please mark your {drug_name} as taken in the app."
+    except Exception as e:
+        print(f"❌ Error marking medication taken: {e}")
+        return f"Something went wrong while recording your dose. Please mark your {drug_name} in the Medications tab of the app."
+
+
+@function_tool(description="Called when patient says they missed or skipped their medication. If enabled in settings, this will record the missed dose in the database. Otherwise directs user to update manually in the app.")
 async def mark_medication_missed(medication_name: str, reason: str = "") -> str:
-    """Decline marking medication as missed - must be done in app by user or caregiver"""
-    print(f"🚫 User reported missing {medication_name} - declining to record (must be done in app)")
+    """Mark medication as missed - checks user permission first"""
+    global _allow_agent_medication_updates, _medication_service, _medications_cache
 
-    # Still provide helpful guidance about missed doses
-    guidance = f"I understand you missed your {medication_name}. While I can't update your medication records directly, I can offer some general guidance. "
-    guidance += "If it's close to your next scheduled dose, you may want to skip the missed dose. If there's plenty of time, you might still take it. "
-    guidance += "For important medications, please check with your pharmacist or doctor. "
-    guidance += "To record this missed dose, please use the Kindura app directly or ask your caregiver to update it for you."
+    # Check if user has granted permission
+    if not _allow_agent_medication_updates:
+        print(f"🚫 User reported missing {medication_name} - declining to record (permission not granted)")
+        guidance = f"I understand you missed your {medication_name}. I'm not currently allowed to update your medication records, but I can offer some guidance. "
+        guidance += "If it's close to your next scheduled dose, you may want to skip the missed dose. If there's plenty of time, you might still take it. "
+        guidance += "To enable me to record this for you, go to Settings and turn on 'Allow Medication Updates' under Kindura AI Permissions. "
+        guidance += "For now, please update this in the Medications tab of the app."
+        return guidance
 
-    return guidance
+    # Find the medication
+    med = _find_medication_by_name(medication_name)
+    if not med:
+        print(f"⚠️ Could not find medication: {medication_name}")
+        return f"I couldn't find a medication called {medication_name} in your records. Please check the name and try again, or update it manually in the app."
+
+    medication_id = med.get('id')
+    drug_name = med.get('drugName', medication_name)
+
+    # Determine scheduled time
+    from datetime import datetime
+    now = datetime.now()
+    scheduled_at = now  # Default
+
+    schedule = med.get('schedule', {})
+    times = schedule.get('times', [])
+    if times:
+        # Find the most recent scheduled time that was missed
+        for time_str in sorted(times, reverse=True):
+            try:
+                parts = time_str.split(':')
+                hour = int(parts[0])
+                minute = int(parts[1]) if len(parts) > 1 else 0
+                sched_dt = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+                if sched_dt <= now:
+                    scheduled_at = sched_dt
+                    break
+            except:
+                pass
+
+    # Record the missed dose
+    try:
+        if _medication_service:
+            result = await _medication_service.record_dose_missed(
+                medication_id=str(medication_id),
+                scheduled_at=scheduled_at,
+                reason=reason if reason else None
+            )
+
+            if result:
+                print(f"⚠️ Successfully recorded missed dose for {drug_name}")
+                response = f"I've recorded that you missed your {drug_name}. "
+                response += "If it's not too close to your next dose, you might still be able to take it. "
+                response += "For important medications, please check with your doctor or pharmacist about what to do."
+                return response
+            else:
+                print(f"❌ Failed to record missed dose for {drug_name}")
+                return f"I had trouble recording this. Please update your {drug_name} in the app."
+        else:
+            print("❌ Medication service not initialized")
+            return f"I'm having trouble connecting. Please record the missed {drug_name} dose in the app."
+    except Exception as e:
+        print(f"❌ Error marking medication missed: {e}")
+        return f"Something went wrong. Please record the missed dose in the Medications tab."
 
 
 def _find_next_scheduled_time(times: list, current_time) -> datetime:
@@ -514,6 +658,102 @@ async def get_medication_history(period: str = "week") -> str:
         return "Unable to retrieve medication history at this time."
 
 
+# Global variable for contacts service
+_contacts_service = None
+
+
+@function_tool(description="Call a contact from the user's Kindura contacts (family, caregivers, doctors). Call types: 'facetime_video' for FaceTime video call, 'facetime_audio' for FaceTime audio call, or 'call' for regular phone call. The app will prompt the user to confirm before placing the call.")
+async def call_contact(contact_name: str, call_type: str = "facetime_video") -> str:
+    """Request to call a contact via FaceTime or phone"""
+    global _contacts_service
+    print(f"📞 Requesting {call_type} call to {contact_name}...")
+
+    if not _contacts_service:
+        return "Unable to make calls - contacts service not available."
+
+    # Validate call type
+    valid_types = ['call', 'facetime_video', 'facetime_audio']
+    if call_type not in valid_types:
+        call_type = 'facetime_video'  # Default to FaceTime video
+
+    try:
+        result = await _contacts_service.create_call_request(
+            contact_name=contact_name,
+            call_type=call_type,
+            reason="Requested by Kindura AI assistant"
+        )
+
+        if result.get('success'):
+            print(f"✅ Call request created for {result.get('contact_name')}")
+            response = f"I'm setting up a {'FaceTime video' if call_type == 'facetime_video' else 'FaceTime audio' if call_type == 'facetime_audio' else 'phone'} call to {result.get('contact_name')}. "
+            response += "The app will ask you to confirm before connecting the call."
+            return response
+        else:
+            print(f"❌ Call request failed: {result.get('message')}")
+            return result.get('message', 'Unable to set up the call.')
+
+    except Exception as e:
+        print(f"❌ Error creating call request: {e}")
+        return f"I wasn't able to set up the call. Please try calling {contact_name} directly from your contacts."
+
+
+@function_tool(description="Send a text message (iMessage) to a contact from the user's Kindura contacts (family, caregivers, doctors). The app will open the Messages app with the message ready to send - the user just needs to tap send to confirm.")
+async def send_message_to_contact(contact_name: str, message: str) -> str:
+    """Request to send a message to a contact via iMessage"""
+    global _contacts_service
+    print(f"💬 Requesting to send message to {contact_name}...")
+
+    if not _contacts_service:
+        return "Unable to send messages - contacts service not available."
+
+    if not message or len(message.strip()) == 0:
+        return "I need a message to send. What would you like me to say?"
+
+    try:
+        result = await _contacts_service.create_message_request(
+            contact_name=contact_name,
+            message=message,
+            reason="Requested by Kindura AI assistant"
+        )
+
+        if result.get('success'):
+            print(f"✅ Message request created for {result.get('contact_name')}")
+            response = f"I've prepared a message to {result.get('contact_name')}. "
+            response += "The Messages app will open with your message ready. Just tap send to confirm."
+            return response
+        else:
+            print(f"❌ Message request failed: {result.get('message')}")
+            return result.get('message', 'Unable to prepare the message.')
+
+    except Exception as e:
+        print(f"❌ Error creating message request: {e}")
+        return f"I wasn't able to prepare the message. Please try messaging {contact_name} directly."
+
+
+@function_tool(description="Get the list of contacts saved in the Kindura app. Returns family members, caregivers, doctors, pharmacies, and emergency contacts. Use this to see who the patient can call or message.")
+async def get_kindura_contacts() -> str:
+    """Get list of contacts saved in the Kindura app"""
+    global _contacts_service
+    print(f"👥 Fetching Kindura contacts...")
+
+    if not _contacts_service:
+        return "Unable to fetch contacts - service not available."
+
+    try:
+        contacts = await _contacts_service.get_contacts()
+
+        if contacts:
+            formatted = _contacts_service.format_contacts_for_context(contacts)
+            print(f"✅ Found {len(contacts)} contacts")
+            return formatted
+        else:
+            return "You don't have any contacts saved in Kindura yet. You can add family members, caregivers, and doctors in the app's Contacts section."
+
+    except Exception as e:
+        print(f"❌ Error getting contacts: {e}")
+        return "Unable to retrieve contacts at this time."
+
+
 async def entrypoint(ctx: agents.JobContext):
     
     await ctx.connect()
@@ -545,6 +785,7 @@ async def entrypoint(ctx: agents.JobContext):
     language = participant_metadata.get('language', 'en')
     agent_conversation_choice = participant_metadata.get('agent_conversation_choice', 'M')
     auth_token = participant_metadata.get("auth_token")
+    allow_medication_updates = participant_metadata.get("allow_agent_medication_updates", False)
 
     # Debug: Log auth token status
     if auth_token:
@@ -552,13 +793,20 @@ async def entrypoint(ctx: agents.JobContext):
     else:
         print("❌ WARNING: No auth_token in participant metadata! API calls will fail.")
 
+    # Log medication update permission
+    if allow_medication_updates:
+        print(f"✅ User has ALLOWED agent to update medication records")
+    else:
+        print(f"ℹ️ User has NOT allowed agent to update medication records (manual updates only)")
+
     # Get medical documents/reports (legacy)
     medical_documents = participant_metadata.get('medical_reports', [])
 
     # Set global variables for function tools
-    global _medication_service, _observations_service, _biomarkers_service, _base_url, _auth_token
+    global _medication_service, _observations_service, _biomarkers_service, _contacts_service, _base_url, _auth_token, _allow_agent_medication_updates, _medications_cache
     _base_url = BASE_URL
     _auth_token = auth_token
+    _allow_agent_medication_updates = allow_medication_updates
 
     # Initialize observations service for saving patient observations
     _observations_service = ObservationsAPI(auth_token)
@@ -580,14 +828,17 @@ async def entrypoint(ctx: agents.JobContext):
 
     if db_medications:
         medicines_summary = medication_service.format_medications_for_agent(db_medications)
-        print(f"💊 Loaded {len(db_medications)} medications from database")
+        _medications_cache = db_medications  # Cache for medication lookup by name
+        print(f"💊 Loaded {len(db_medications)} medications from database (cached for voice commands)")
     elif db_medications is not None and len(db_medications) == 0:
         # API succeeded but no medications registered
         medicines_summary = "No medications currently registered in your profile. You can add medications in the Medications tab of the app."
+        _medications_cache = []
         print("ℹ️ No medications registered for this user")
     else:
         # API failed - do NOT use fallback metadata
         medicines_summary = "Unable to access your medication list at the moment. Please check your internet connection or try again later."
+        _medications_cache = []
         print("❌ Failed to fetch medications from database - NO FALLBACK USED")
 
     # Fetch uploaded medical reports and pending recommendations from API
@@ -660,12 +911,14 @@ async def entrypoint(ctx: agents.JobContext):
 
     # Fetch user contacts (family, caregivers, emergency contacts)
     contacts_api = ContactsAPI(auth_token)
+    _contacts_service = contacts_api  # Store for function tools (call_contact, send_message_to_contact)
     try:
         contacts = await contacts_api.get_contacts()
         emergency_contacts = await contacts_api.get_emergency_contacts()
         contacts_summary = contacts_api.format_contacts_for_context(contacts) if contacts else "No contacts saved."
         emergency_contacts_summary = contacts_api.format_emergency_contacts_summary(emergency_contacts) if emergency_contacts else "No emergency contacts set up."
         print(f"👥 Loaded {len(contacts) if contacts else 0} contacts ({len(emergency_contacts) if emergency_contacts else 0} emergency)")
+        print(f"📞 Contacts service initialized for call/message functions")
     except Exception as e:
         print(f"❌ Error fetching contacts: {e}")
         contacts_summary = "Unable to fetch contacts."
@@ -730,6 +983,10 @@ async def entrypoint(ctx: agents.JobContext):
         get_labs_summary,
         # Medication history and adherence analysis
         get_medication_history,
+        # Contact and communication tools
+        get_kindura_contacts,
+        call_contact,
+        send_message_to_contact,
     ]
     print(f"🔧 Registering {len(agent_tools)} function tools with agent")
     for tool in agent_tools:

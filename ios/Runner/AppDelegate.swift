@@ -3,13 +3,20 @@ import Flutter
 import WatchConnectivity
 import AVFoundation
 import HealthKit
+import Contacts
+import MessageUI
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, WCSessionDelegate {
     private var watchVitalsChannel: FlutterMethodChannel?
+    private var contactsChannel: FlutterMethodChannel?
     private var latestWatchVitals: [String: Any]?
+    private let contactStore = CNContactStore()
     private let appGroupIdentifier = "group.com.kindura.ai"
     private let healthStore = HKHealthStore()
+
+    // DEBUG MODE - Set to true for verbose logging
+    private let DEBUG_MODE = true
 
     // Pending vitals queue for when API is unreachable
     private var pendingVitalsQueue: [[String: Any]] = []
@@ -40,6 +47,55 @@ import HealthKit
         setupFlutterMethodChannel()
 
         return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+    }
+
+    // MARK: - App Lifecycle - Proactive Watch Sync
+
+    override func applicationDidBecomeActive(_ application: UIApplication) {
+        super.applicationDidBecomeActive(application)
+        print("[AppDelegate] 📱 App became active - triggering Watch sync")
+
+        // Proactively sync with Watch when app becomes active
+        syncWithWatch()
+    }
+
+    /// Proactive sync with Watch - called when iPhone app becomes active
+    private func syncWithWatch() {
+        guard WCSession.isSupported() else { return }
+
+        let session = WCSession.default
+        guard session.activationState == .activated else {
+            print("[AppDelegate] WCSession not activated yet - will sync when ready")
+            return
+        }
+
+        // 1. Send configuration to Watch (so it can start sending vitals)
+        resendStoredConfiguration()
+
+        // 2. Request current vitals from Watch
+        if session.isReachable {
+            print("[AppDelegate] 📤 Requesting current vitals from Watch")
+            session.sendMessage(["type": "request_vitals"], replyHandler: { response in
+                print("[AppDelegate] ✅ Received vitals response from Watch: \(response.keys)")
+
+                // Store as latest vitals
+                if response["type"] as? String == "watch_vitals" {
+                    self.latestWatchVitals = response
+
+                    // Forward to Django API
+                    self.forwardVitalsToDjango(vitals: response)
+
+                    // Notify Flutter
+                    DispatchQueue.main.async {
+                        self.watchVitalsChannel?.invokeMethod("onWatchVitalsReceived", arguments: response)
+                    }
+                }
+            }, errorHandler: { error in
+                print("[AppDelegate] ⚠️ Failed to request vitals from Watch: \(error.localizedDescription)")
+            })
+        } else {
+            print("[AppDelegate] Watch not reachable - vitals will sync via transferUserInfo")
+        }
     }
 
     // MARK: - WatchConnectivity Setup
@@ -145,6 +201,13 @@ import HealthKit
             case "getWatchStatus":
                 self?.sendWatchCommand(command: "get_status", result: result)
 
+            case "sendMedicationReminder":
+                if let args = call.arguments as? [String: Any] {
+                    self?.sendMedicationReminderToWatch(medicationData: args, result: result)
+                } else {
+                    result(FlutterError(code: "INVALID_ARGS", message: "Missing medication reminder data", details: nil))
+                }
+
             default:
                 result(FlutterMethodNotImplemented)
             }
@@ -154,6 +217,335 @@ import HealthKit
         if UserDefaults.standard.bool(forKey: "healthkit_authorized") {
             print("[AppDelegate] HealthKit previously authorized - starting observers")
             startHealthKitObservers()
+        }
+
+        // Setup contacts method channel
+        setupContactsMethodChannel(controller: controller)
+    }
+
+    // MARK: - Contacts Method Channel Setup
+
+    private func setupContactsMethodChannel(controller: FlutterViewController) {
+        contactsChannel = FlutterMethodChannel(
+            name: "com.kindura.ai/contacts",
+            binaryMessenger: controller.binaryMessenger
+        )
+
+        contactsChannel?.setMethodCallHandler { [weak self] (call, result) in
+            switch call.method {
+            case "requestContactsPermission":
+                self?.requestContactsPermission(result: result)
+
+            case "getDeviceContacts":
+                self?.getDeviceContacts(result: result)
+
+            case "searchContacts":
+                if let args = call.arguments as? [String: Any],
+                   let query = args["query"] as? String {
+                    self?.searchContacts(query: query, result: result)
+                } else {
+                    result(FlutterError(code: "INVALID_ARGS", message: "Missing query parameter", details: nil))
+                }
+
+            case "sendMessage":
+                if let args = call.arguments as? [String: Any],
+                   let phoneNumber = args["phoneNumber"] as? String,
+                   let message = args["message"] as? String {
+                    self?.openMessagesApp(phoneNumber: phoneNumber, message: message, result: result)
+                } else {
+                    result(FlutterError(code: "INVALID_ARGS", message: "Missing phoneNumber or message", details: nil))
+                }
+
+            case "makeCall":
+                if let args = call.arguments as? [String: Any],
+                   let phoneNumber = args["phoneNumber"] as? String {
+                    let callType = args["callType"] as? String ?? "phone"
+                    self?.makeCall(phoneNumber: phoneNumber, callType: callType, result: result)
+                } else {
+                    result(FlutterError(code: "INVALID_ARGS", message: "Missing phoneNumber", details: nil))
+                }
+
+            case "startFaceTimeCall":
+                if let args = call.arguments as? [String: Any],
+                   let contact = args["contact"] as? String {
+                    let isVideo = args["isVideo"] as? Bool ?? true
+                    self?.startFaceTimeCall(contact: contact, isVideo: isVideo, result: result)
+                } else {
+                    result(FlutterError(code: "INVALID_ARGS", message: "Missing contact", details: nil))
+                }
+
+            default:
+                result(FlutterMethodNotImplemented)
+            }
+        }
+
+        print("[AppDelegate] Contacts method channel setup complete")
+    }
+
+    // MARK: - Contacts Permission
+
+    private func requestContactsPermission(result: @escaping FlutterResult) {
+        let status = CNContactStore.authorizationStatus(for: .contacts)
+
+        switch status {
+        case .authorized:
+            result(true)
+        case .notDetermined:
+            contactStore.requestAccess(for: .contacts) { granted, error in
+                DispatchQueue.main.async {
+                    if let error = error {
+                        print("[AppDelegate] Contacts permission error: \(error.localizedDescription)")
+                        result(false)
+                    } else {
+                        result(granted)
+                    }
+                }
+            }
+        case .denied, .restricted:
+            result(false)
+        @unknown default:
+            result(false)
+        }
+    }
+
+    // MARK: - Get Device Contacts
+
+    private func getDeviceContacts(result: @escaping FlutterResult) {
+        let status = CNContactStore.authorizationStatus(for: .contacts)
+
+        guard status == .authorized else {
+            print("[AppDelegate] Contacts not authorized")
+            result(FlutterError(code: "NOT_AUTHORIZED", message: "Contacts access not authorized", details: nil))
+            return
+        }
+
+        let keysToFetch: [CNKeyDescriptor] = [
+            CNContactGivenNameKey as CNKeyDescriptor,
+            CNContactFamilyNameKey as CNKeyDescriptor,
+            CNContactNicknameKey as CNKeyDescriptor,
+            CNContactPhoneNumbersKey as CNKeyDescriptor,
+            CNContactEmailAddressesKey as CNKeyDescriptor,
+            CNContactImageDataAvailableKey as CNKeyDescriptor,
+            CNContactRelationsKey as CNKeyDescriptor,  // Related names (spouse, parent, etc)
+            CNContactOrganizationNameKey as CNKeyDescriptor,
+        ]
+
+        let request = CNContactFetchRequest(keysToFetch: keysToFetch)
+        request.sortOrder = .givenName
+
+        var contacts: [[String: Any]] = []
+
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            do {
+                try self?.contactStore.enumerateContacts(with: request) { contact, _ in
+                    var contactDict: [String: Any] = [:]
+
+                    // Name
+                    let fullName = "\(contact.givenName) \(contact.familyName)".trimmingCharacters(in: .whitespaces)
+                    contactDict["id"] = contact.identifier
+                    contactDict["givenName"] = contact.givenName
+                    contactDict["familyName"] = contact.familyName
+                    contactDict["fullName"] = fullName.isEmpty ? contact.organizationName : fullName
+                    contactDict["nickname"] = contact.nickname
+                    contactDict["organization"] = contact.organizationName
+
+                    // Phone numbers
+                    var phones: [[String: String]] = []
+                    for phone in contact.phoneNumbers {
+                        let label = CNLabeledValue<CNPhoneNumber>.localizedString(forLabel: phone.label ?? "")
+                        phones.append([
+                            "label": label,
+                            "number": phone.value.stringValue
+                        ])
+                    }
+                    contactDict["phoneNumbers"] = phones
+
+                    // Emails
+                    var emails: [[String: String]] = []
+                    for email in contact.emailAddresses {
+                        let label = CNLabeledValue<NSString>.localizedString(forLabel: email.label ?? "")
+                        emails.append([
+                            "label": label,
+                            "email": email.value as String
+                        ])
+                    }
+                    contactDict["emails"] = emails
+
+                    // Has image
+                    contactDict["hasImage"] = contact.imageDataAvailable
+
+                    // Only include contacts with phone numbers or emails
+                    if !phones.isEmpty || !emails.isEmpty {
+                        contacts.append(contactDict)
+                    }
+                }
+
+                DispatchQueue.main.async {
+                    print("[AppDelegate] ✅ Fetched \(contacts.count) contacts")
+                    result(contacts)
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    print("[AppDelegate] ❌ Error fetching contacts: \(error.localizedDescription)")
+                    result(FlutterError(code: "FETCH_ERROR", message: error.localizedDescription, details: nil))
+                }
+            }
+        }
+    }
+
+    // MARK: - Search Contacts
+
+    private func searchContacts(query: String, result: @escaping FlutterResult) {
+        let status = CNContactStore.authorizationStatus(for: .contacts)
+
+        guard status == .authorized else {
+            result(FlutterError(code: "NOT_AUTHORIZED", message: "Contacts access not authorized", details: nil))
+            return
+        }
+
+        let keysToFetch: [CNKeyDescriptor] = [
+            CNContactGivenNameKey as CNKeyDescriptor,
+            CNContactFamilyNameKey as CNKeyDescriptor,
+            CNContactPhoneNumbersKey as CNKeyDescriptor,
+            CNContactEmailAddressesKey as CNKeyDescriptor,
+        ]
+
+        // Search by name
+        let predicate = CNContact.predicateForContacts(matchingName: query)
+
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            do {
+                let contacts = try self?.contactStore.unifiedContacts(matching: predicate, keysToFetch: keysToFetch) ?? []
+
+                var results: [[String: Any]] = []
+                for contact in contacts {
+                    var contactDict: [String: Any] = [:]
+                    let fullName = "\(contact.givenName) \(contact.familyName)".trimmingCharacters(in: .whitespaces)
+                    contactDict["id"] = contact.identifier
+                    contactDict["fullName"] = fullName
+
+                    // Primary phone
+                    if let phone = contact.phoneNumbers.first {
+                        contactDict["phoneNumber"] = phone.value.stringValue
+                    }
+
+                    // Primary email
+                    if let email = contact.emailAddresses.first {
+                        contactDict["email"] = email.value as String
+                    }
+
+                    results.append(contactDict)
+                }
+
+                DispatchQueue.main.async {
+                    print("[AppDelegate] ✅ Found \(results.count) contacts matching '\(query)'")
+                    result(results)
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    result(FlutterError(code: "SEARCH_ERROR", message: error.localizedDescription, details: nil))
+                }
+            }
+        }
+    }
+
+    // MARK: - Send Message (Opens Messages App)
+
+    private func openMessagesApp(phoneNumber: String, message: String, result: @escaping FlutterResult) {
+        // Clean phone number
+        let cleanNumber = phoneNumber.replacingOccurrences(of: " ", with: "")
+            .replacingOccurrences(of: "-", with: "")
+            .replacingOccurrences(of: "(", with: "")
+            .replacingOccurrences(of: ")", with: "")
+
+        // Use sms: URL scheme with body parameter
+        // Note: User must tap send - iOS doesn't allow programmatic sending
+        let encodedMessage = message.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? message
+
+        if let url = URL(string: "sms:\(cleanNumber)&body=\(encodedMessage)") {
+            DispatchQueue.main.async {
+                if UIApplication.shared.canOpenURL(url) {
+                    UIApplication.shared.open(url, options: [:]) { success in
+                        if success {
+                            print("[AppDelegate] ✅ Opened Messages app for \(cleanNumber)")
+                            result(["status": "opened", "message": "Messages app opened. Please tap send."])
+                        } else {
+                            result(FlutterError(code: "OPEN_FAILED", message: "Failed to open Messages app", details: nil))
+                        }
+                    }
+                } else {
+                    result(FlutterError(code: "NOT_AVAILABLE", message: "Messages app not available", details: nil))
+                }
+            }
+        } else {
+            result(FlutterError(code: "INVALID_URL", message: "Could not create message URL", details: nil))
+        }
+    }
+
+    // MARK: - Make Call (Phone or FaceTime)
+
+    private func makeCall(phoneNumber: String, callType: String, result: @escaping FlutterResult) {
+        let cleanNumber = phoneNumber.replacingOccurrences(of: " ", with: "")
+            .replacingOccurrences(of: "-", with: "")
+            .replacingOccurrences(of: "(", with: "")
+            .replacingOccurrences(of: ")", with: "")
+
+        var urlString: String
+
+        switch callType.lowercased() {
+        case "facetime", "facetime-video":
+            urlString = "facetime://\(cleanNumber)"
+        case "facetime-audio":
+            urlString = "facetime-audio://\(cleanNumber)"
+        default:
+            urlString = "tel://\(cleanNumber)"
+        }
+
+        if let url = URL(string: urlString) {
+            DispatchQueue.main.async {
+                if UIApplication.shared.canOpenURL(url) {
+                    UIApplication.shared.open(url, options: [:]) { success in
+                        if success {
+                            print("[AppDelegate] ✅ Initiated \(callType) call to \(cleanNumber)")
+                            result(["status": "calling", "callType": callType])
+                        } else {
+                            result(FlutterError(code: "CALL_FAILED", message: "Failed to initiate call", details: nil))
+                        }
+                    }
+                } else {
+                    result(FlutterError(code: "NOT_AVAILABLE", message: "\(callType) not available on this device", details: nil))
+                }
+            }
+        } else {
+            result(FlutterError(code: "INVALID_URL", message: "Could not create call URL", details: nil))
+        }
+    }
+
+    // MARK: - FaceTime Call
+
+    private func startFaceTimeCall(contact: String, isVideo: Bool, result: @escaping FlutterResult) {
+        let scheme = isVideo ? "facetime" : "facetime-audio"
+
+        // Contact can be phone number or email
+        let encodedContact = contact.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? contact
+
+        if let url = URL(string: "\(scheme)://\(encodedContact)") {
+            DispatchQueue.main.async {
+                if UIApplication.shared.canOpenURL(url) {
+                    UIApplication.shared.open(url, options: [:]) { success in
+                        if success {
+                            print("[AppDelegate] ✅ Initiated FaceTime \(isVideo ? "video" : "audio") call to \(contact)")
+                            result(["status": "calling", "isVideo": isVideo])
+                        } else {
+                            result(FlutterError(code: "CALL_FAILED", message: "Failed to initiate FaceTime", details: nil))
+                        }
+                    }
+                } else {
+                    result(FlutterError(code: "NOT_AVAILABLE", message: "FaceTime not available", details: nil))
+                }
+            }
+        } else {
+            result(FlutterError(code: "INVALID_URL", message: "Could not create FaceTime URL", details: nil))
         }
     }
 
@@ -353,12 +745,77 @@ import HealthKit
             group.leave()
         }
 
+        // ===== FALLS FROM HEALTHKIT =====
+
+        group.enter()
+        fetchTodayFalls { fallsCount in
+            healthData["healthkit_falls_count"] = fallsCount
+            print("[AppDelegate] 🩺 HealthKit falls today: \(fallsCount)")
+            group.leave()
+        }
+
         group.notify(queue: .main) {
             healthData["source"] = "apple_health"
             healthData["fetched_at"] = ISO8601DateFormatter().string(from: Date())
-            print("[AppDelegate] Health data complete - HR: \(healthData["heart_rate"] ?? "nil"), O2: \(healthData["blood_oxygen"] ?? "nil"), Steps: \(healthData["steps"] ?? "nil"), Sleep: \(healthData["sleep_hours"] ?? "nil")")
+
+            // Get falls from multiple sources and use the maximum
+            var totalFalls = 0
+            var fallDetected = false
+
+            // Source 1: HealthKit (Watch writes falls here)
+            if let healthKitFalls = healthData["healthkit_falls_count"] as? Int {
+                totalFalls = max(totalFalls, healthKitFalls)
+                if healthKitFalls > 0 {
+                    fallDetected = true
+                }
+            }
+
+            // Source 2: WatchConnectivity (real-time from Watch)
+            if let watchVitals = self.latestWatchVitals {
+                if let watchFalls = watchVitals["falls_count"] as? Int {
+                    totalFalls = max(totalFalls, watchFalls)
+                    if watchFalls > 0 {
+                        fallDetected = true
+                    }
+                }
+                if let watchFallDetected = watchVitals["fall_detected"] as? Bool, watchFallDetected {
+                    fallDetected = true
+                    totalFalls = max(totalFalls, 1)  // At least 1 if fall detected
+                }
+            }
+
+            healthData["falls_count"] = totalFalls
+            healthData["fall_detected"] = fallDetected
+            print("[AppDelegate] 🩺 Final falls_count: \(totalFalls), fall_detected: \(fallDetected)")
+
+            print("[AppDelegate] Health data complete - HR: \(healthData["heart_rate"] ?? "nil"), O2: \(healthData["blood_oxygen"] ?? "nil"), Steps: \(healthData["steps"] ?? "nil"), Sleep: \(healthData["sleep_hours"] ?? "nil"), Falls: \(healthData["falls_count"] ?? 0)")
             result(healthData)
         }
+    }
+
+    /// Fetch today's falls from HealthKit
+    private func fetchTodayFalls(completion: @escaping (Int) -> Void) {
+        guard let fallType = HKQuantityType.quantityType(forIdentifier: .numberOfTimesFallen) else {
+            completion(0)
+            return
+        }
+
+        let now = Date()
+        let startOfDay = Calendar.current.startOfDay(for: now)
+        let predicate = HKQuery.predicateForSamples(withStart: startOfDay, end: now, options: .strictStartDate)
+
+        let query = HKStatisticsQuery(quantityType: fallType, quantitySamplePredicate: predicate, options: .cumulativeSum) { _, result, error in
+            if let error = error {
+                print("[AppDelegate] ❌ Error fetching falls: \(error.localizedDescription)")
+                completion(0)
+                return
+            }
+
+            let count = Int(result?.sumQuantity()?.doubleValue(for: HKUnit.count()) ?? 0)
+            completion(count)
+        }
+
+        healthStore.execute(query)
     }
 
     /// Get health history for specified number of days (for Vitals History screen)
@@ -487,7 +944,7 @@ import HealthKit
         self.healthStore.execute(query)
     }
 
-    /// Fetch sleep history by date
+    /// Fetch sleep history by date - prioritizes Apple Watch/HealthKit data
     private func fetchSleepHistory(startDate: Date, endDate: Date, completion: @escaping ([[String: Any]]) -> Void) {
         guard let sleepType = HKCategoryType.categoryType(forIdentifier: .sleepAnalysis) else {
             completion([])
@@ -497,7 +954,7 @@ import HealthKit
         let predicate = HKQuery.predicateForSamples(withStart: startDate, end: endDate, options: .strictEndDate)
         let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)
 
-        let query = HKSampleQuery(sampleType: sleepType, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: [sortDescriptor]) { _, samples, error in
+        let query = HKSampleQuery(sampleType: sleepType, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: [sortDescriptor]) { [weak self] _, samples, error in
             if let error = error {
                 print("[AppDelegate] Error fetching sleep history: \(error)")
                 completion([])
@@ -509,12 +966,34 @@ import HealthKit
                 return
             }
 
+            // Filter to prioritize Apple Watch/HealthKit samples
+            var watchSamples: [HKCategorySample] = []
+            var otherSamples: [HKCategorySample] = []
+
+            for sample in sleepSamples {
+                let sourceName = sample.sourceRevision.source.name.lowercased()
+                let bundleId = sample.sourceRevision.source.bundleIdentifier.lowercased()
+
+                let isAppleWatch = sourceName.contains("watch") ||
+                                   bundleId.contains("com.apple.health") ||
+                                   bundleId.contains("com.apple.nano") ||
+                                   sample.device?.name?.lowercased().contains("watch") == true
+
+                if isAppleWatch {
+                    watchSamples.append(sample)
+                } else {
+                    otherSamples.append(sample)
+                }
+            }
+
+            let samplesToUse = !watchSamples.isEmpty ? watchSamples : otherSamples
+
             // Group sleep by date
             var sleepByDate: [String: [HKCategorySample]] = [:]
             let dateFormatter = DateFormatter()
             dateFormatter.dateFormat = "yyyy-MM-dd"
 
-            for sample in sleepSamples {
+            for sample in samplesToUse {
                 let dateKey = dateFormatter.string(from: sample.startDate)
                 if sleepByDate[dateKey] == nil {
                     sleepByDate[dateKey] = []
@@ -522,16 +1001,19 @@ import HealthKit
                 sleepByDate[dateKey]?.append(sample)
             }
 
-            // Calculate totals per day
+            // Calculate totals per day with deduplication
             var results: [[String: Any]] = []
             for (dateKey, daySamples) in sleepByDate {
+                // Deduplicate samples for this day
+                let deduplicatedSamples = self?.deduplicateSleepSamples(daySamples) ?? daySamples
+
                 var totalSleep: TimeInterval = 0
                 var deepSleep: TimeInterval = 0
                 var remSleep: TimeInterval = 0
                 var coreSleep: TimeInterval = 0
                 var awakeSleep: TimeInterval = 0
 
-                for sample in daySamples {
+                for sample in deduplicatedSamples {
                     let duration = sample.endDate.timeIntervalSince(sample.startDate)
 
                     if #available(iOS 16.0, *) {
@@ -754,7 +1236,43 @@ import HealthKit
                 return
             }
 
-            print("[AppDelegate] 😴 Found \(sleepSamples.count) sleep samples")
+            print("[AppDelegate] 😴 Found \(sleepSamples.count) total sleep samples from all sources")
+
+            // Group samples by source to prioritize Apple Watch data
+            var watchSamples: [HKCategorySample] = []
+            var otherSamples: [HKCategorySample] = []
+
+            for sample in sleepSamples {
+                let sourceName = sample.sourceRevision.source.name.lowercased()
+                let bundleId = sample.sourceRevision.source.bundleIdentifier.lowercased()
+
+                // Check if sample is from Apple Watch or Apple's native sleep tracking
+                let isAppleWatch = sourceName.contains("watch") ||
+                                   bundleId.contains("com.apple.health") ||
+                                   bundleId.contains("com.apple.nano") ||  // watchOS
+                                   sample.device?.name?.lowercased().contains("watch") == true
+
+                if isAppleWatch {
+                    watchSamples.append(sample)
+                } else {
+                    otherSamples.append(sample)
+                }
+            }
+
+            // Prioritize Apple Watch samples, fall back to other sources
+            let samplesToUse: [HKCategorySample]
+            if !watchSamples.isEmpty {
+                samplesToUse = watchSamples
+                print("[AppDelegate] 😴 Using \(watchSamples.count) Apple Watch/HealthKit samples (prioritized)")
+                print("[AppDelegate] 😴 Ignoring \(otherSamples.count) samples from other sources")
+            } else {
+                samplesToUse = otherSamples
+                print("[AppDelegate] 😴 No Apple Watch data, using \(otherSamples.count) samples from other sources")
+            }
+
+            // Deduplicate overlapping time intervals
+            let deduplicatedSamples = self.deduplicateSleepSamples(samplesToUse)
+            print("[AppDelegate] 😴 After deduplication: \(deduplicatedSamples.count) unique sleep intervals")
 
             var totalSleep: TimeInterval = 0
             var stages: [[String: Any]] = []
@@ -763,9 +1281,8 @@ import HealthKit
             var coreSleep: TimeInterval = 0
             var awakeSleep: TimeInterval = 0
 
-            for sample in sleepSamples {
+            for sample in deduplicatedSamples {
                 let duration = sample.endDate.timeIntervalSince(sample.startDate)
-                print("[AppDelegate] Sleep sample: value=\(sample.value), duration=\(duration/3600)h")
 
                 // Categorize by sleep stage - iOS 16+ has specific stages
                 if #available(iOS 16.0, *) {
@@ -774,30 +1291,21 @@ import HealthKit
                     case .asleepCore:
                         coreSleep += duration
                         totalSleep += duration
-                        print("[AppDelegate] → Core sleep: \(duration/3600)h")
                     case .asleepDeep:
                         deepSleep += duration
                         totalSleep += duration
-                        print("[AppDelegate] → Deep sleep: \(duration/3600)h")
                     case .asleepREM:
                         remSleep += duration
                         totalSleep += duration
-                        print("[AppDelegate] → REM sleep: \(duration/3600)h")
                     case .awake:
                         awakeSleep += duration
-                        print("[AppDelegate] → Awake: \(duration/3600)h")
-                    case .asleepUnspecified:
+                    case .asleepUnspecified, .asleep:
                         coreSleep += duration
                         totalSleep += duration
-                        print("[AppDelegate] → Unspecified sleep (counted as Core): \(duration/3600)h")
-                    case .asleep:
-                        coreSleep += duration
-                        totalSleep += duration
-                        print("[AppDelegate] → Asleep (counted as Core): \(duration/3600)h")
                     case .inBed:
-                        print("[AppDelegate] → In bed (not counted): \(duration/3600)h")
+                        // In bed is not counted as sleep
+                        break
                     default:
-                        print("[AppDelegate] → Unknown sleep value \(sample.value): \(duration/3600)h")
                         break
                     }
                 } else {
@@ -812,7 +1320,7 @@ import HealthKit
             }
 
             // Build stages array
-            print("[AppDelegate] 😴 Sleep totals - Deep: \(deepSleep/3600)h, REM: \(remSleep/3600)h, Core: \(coreSleep/3600)h, Awake: \(awakeSleep/3600)h, Total: \(totalSleep/3600)h")
+            print("[AppDelegate] 😴 Sleep totals - Deep: \(String(format: "%.2f", deepSleep/3600))h, REM: \(String(format: "%.2f", remSleep/3600))h, Core: \(String(format: "%.2f", coreSleep/3600))h, Awake: \(String(format: "%.2f", awakeSleep/3600))h, Total: \(String(format: "%.2f", totalSleep/3600))h")
 
             if deepSleep > 0 {
                 stages.append(["stage": "Deep", "hours": deepSleep / 3600])
@@ -827,11 +1335,44 @@ import HealthKit
                 stages.append(["stage": "Awake", "hours": awakeSleep / 3600])
             }
 
-            print("[AppDelegate] 😴 Final stages array: \(stages)")
+            print("[AppDelegate] 😴 Final sleep: \(String(format: "%.2f", totalSleep/3600)) hours")
             completion(totalSleep / 3600, stages)
         }
 
         healthStore.execute(query)
+    }
+
+    /// Deduplicate overlapping sleep samples to avoid double-counting
+    private func deduplicateSleepSamples(_ samples: [HKCategorySample]) -> [HKCategorySample] {
+        guard !samples.isEmpty else { return [] }
+
+        // Sort by start date
+        let sorted = samples.sorted { $0.startDate < $1.startDate }
+
+        var result: [HKCategorySample] = []
+        var processedIntervals: [(start: Date, end: Date)] = []
+
+        for sample in sorted {
+            let sampleStart = sample.startDate
+            let sampleEnd = sample.endDate
+
+            // Check if this sample overlaps with any already processed interval
+            var isOverlapping = false
+            for interval in processedIntervals {
+                // Check for overlap: two intervals overlap if one starts before the other ends
+                if sampleStart < interval.end && sampleEnd > interval.start {
+                    isOverlapping = true
+                    break
+                }
+            }
+
+            if !isOverlapping {
+                result.append(sample)
+                processedIntervals.append((start: sampleStart, end: sampleEnd))
+            }
+        }
+
+        return result
     }
 
     /// Fetch blood pressure (systolic/diastolic)
@@ -1259,6 +1800,66 @@ import HealthKit
         })
     }
 
+    // MARK: - Send Medication Reminder to Watch
+
+    /// Send a medication reminder to the Watch
+    /// Uses sendMessage for real-time delivery with transferUserInfo fallback for guaranteed delivery
+    private func sendMedicationReminderToWatch(medicationData: [String: Any], result: @escaping FlutterResult) {
+        let session = WCSession.default
+
+        guard session.activationState == .activated else {
+            print("[AppDelegate] 💊 WCSession not activated for medication reminder")
+            result(false)
+            return
+        }
+
+        guard session.isPaired else {
+            print("[AppDelegate] 💊 No Watch paired - cannot send medication reminder")
+            result(false)
+            return
+        }
+
+        // Build reminder payload
+        var reminderData = medicationData
+        reminderData["type"] = "medication_reminder"
+        reminderData["timestamp"] = ISO8601DateFormatter().string(from: Date())
+        reminderData["reminder_id"] = UUID().uuidString
+
+        print("[AppDelegate] 💊 Sending medication reminder to Watch: \(reminderData["medication_name"] ?? "unknown")")
+
+        // Try real-time delivery first if Watch is reachable
+        if session.isReachable {
+            session.sendMessage(reminderData, replyHandler: { response in
+                print("[AppDelegate] 💊 ✅ Watch received medication reminder: \(response)")
+                DispatchQueue.main.async {
+                    result(true)
+                }
+            }, errorHandler: { error in
+                print("[AppDelegate] 💊 ⚠️ Real-time delivery failed: \(error.localizedDescription)")
+                // Fallback to guaranteed delivery
+                self.queueMedicationReminderForDelivery(reminderData)
+                DispatchQueue.main.async {
+                    result(true) // Still return true as it's queued
+                }
+            })
+        } else {
+            // Watch not immediately reachable - queue for guaranteed delivery
+            print("[AppDelegate] 💊 Watch not reachable - queuing via transferUserInfo")
+            queueMedicationReminderForDelivery(reminderData)
+            result(true)
+        }
+    }
+
+    /// Queue medication reminder for guaranteed delivery via transferUserInfo
+    private func queueMedicationReminderForDelivery(_ reminderData: [String: Any]) {
+        var data = reminderData
+        data["transfer_id"] = UUID().uuidString
+        data["queued_at"] = ISO8601DateFormatter().string(from: Date())
+
+        WCSession.default.transferUserInfo(data)
+        print("[AppDelegate] 💊 Medication reminder queued via transferUserInfo")
+    }
+
     // MARK: - Send Configuration to Watch
 
     private func sendConfigurationToWatch(baseURL: String, token: String) {
@@ -1365,20 +1966,78 @@ import HealthKit
             return
         }
 
+        // Handle fall alert (high priority) - from Watch fall detection
+        if message["type"] as? String == "fall_alert" {
+            print("[AppDelegate] ⚠️ FALL ALERT received from Watch!")
+            print("[AppDelegate] Fall data: severity=\(message["severity"] ?? "unknown"), impact=\(message["impact_g"] ?? 0)G")
+
+            // Fall-specific deduplication using timestamp
+            let fallTimestamp = message["timestamp"] as? String ?? ""
+            let severity = message["severity"] as? String ?? ""
+            let fallEventKey = "processedFall_\(fallTimestamp)_\(severity)"
+
+            if UserDefaults.standard.bool(forKey: fallEventKey) {
+                print("[AppDelegate] ⚠️ Skipping duplicate fall event (real-time): \(fallTimestamp)")
+                replyHandler(["status": "fall_alert_duplicate"])
+                return
+            }
+
+            // Mark this fall event as processed
+            UserDefaults.standard.set(true, forKey: fallEventKey)
+
+            // Store as latest vitals with fall flag
+            var fallVitals = message
+            fallVitals["fall_detected"] = true
+            latestWatchVitals = fallVitals
+
+            // Forward to Django API immediately (high priority)
+            forwardFallAlertToDjango(fallData: message)
+
+            // Notify Flutter about fall detection (if active)
+            DispatchQueue.main.async {
+                self.watchVitalsChannel?.invokeMethod("onWatchVitalsReceived", arguments: fallVitals)
+            }
+
+            replyHandler(["status": "fall_alert_received"])
+            return
+        }
+
+        // Handle medication reminder response from Watch
+        if message["type"] as? String == "medication_reminder_response" {
+            print("[AppDelegate] 💊 Medication reminder response from Watch: \(message)")
+
+            // Forward to Flutter via method channel
+            DispatchQueue.main.async {
+                self.watchVitalsChannel?.invokeMethod("onMedicationReminderResponse", arguments: message)
+            }
+
+            replyHandler(["status": "medication_response_received"])
+            return
+        }
+
         replyHandler(["status": "unknown_type"])
     }
 
     // MARK: - Forward Vitals to Django API (Native Layer)
 
     private func forwardVitalsToDjango(vitals: [String: Any]) {
+        if DEBUG_MODE {
+            print("[AppDelegate] 🌐 DEBUG: Forwarding vitals to Django...")
+            print("  HR: \(vitals["heart_rate"] ?? 0) | O2: \(vitals["blood_oxygen"] ?? 0)")
+            print("  Steps: \(vitals["steps"] ?? 0) | Delivery: \(vitals["delivery_method"] ?? "sendMessage")")
+        }
+
         guard let defaults = UserDefaults(suiteName: appGroupIdentifier),
               let baseURL = defaults.string(forKey: "api_base_url"),
               let token = defaults.string(forKey: "auth_token"),
               !baseURL.isEmpty, !token.isEmpty else {
             print("[AppDelegate] ⚠️ No API configuration - cannot forward vitals")
+            if DEBUG_MODE { print("[AppDelegate] 📊 Buffering vitals for later...") }
             bufferVitals(vitals)
             return
         }
+
+        if DEBUG_MODE { print("[AppDelegate] 📊 API URL: \(baseURL)/api/watch-vitals/dev/") }
 
         // Build API URL
         let urlString = "\(baseURL)/api/watch-vitals/dev/"
@@ -1389,10 +2048,12 @@ import HealthKit
 
         // Prepare request body
         var apiData: [String: Any] = [:]
+        // Vitals
         apiData["heart_rate"] = vitals["heart_rate"] ?? 0
         apiData["blood_oxygen"] = vitals["blood_oxygen"] ?? 0
         apiData["hrv"] = vitals["hrv"]
         apiData["respiratory_rate"] = vitals["respiratory_rate"]
+        // Sleep
         apiData["total_sleep_hours"] = vitals["total_sleep_hours"]
         apiData["deep_sleep_hours"] = vitals["deep_sleep_hours"]
         apiData["rem_sleep_hours"] = vitals["rem_sleep_hours"]
@@ -1400,7 +2061,16 @@ import HealthKit
         apiData["awake_time_hours"] = vitals["awake_time_hours"]
         apiData["awakenings_count"] = vitals["awakenings_count"]
         apiData["sleep_quality"] = vitals["sleep_quality"]
+        // Falls
         apiData["fall_detected"] = vitals["fall_detected"] ?? false
+        // Activity
+        apiData["steps"] = vitals["steps"] ?? 0
+        apiData["calories"] = vitals["calories"] ?? 0
+        apiData["distance_km"] = vitals["distance_km"] ?? 0
+        apiData["floors_climbed"] = vitals["floors_climbed"] ?? 0
+        apiData["exercise_minutes"] = vitals["exercise_minutes"] ?? 0
+        apiData["stand_minutes"] = vitals["stand_minutes"] ?? 0
+        // Timestamp
         apiData["recorded_at"] = vitals["timestamp"] ?? ISO8601DateFormatter().string(from: Date())
 
         guard let jsonData = try? JSONSerialization.data(withJSONObject: apiData) else {
@@ -1420,6 +2090,7 @@ import HealthKit
         let task = URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
             if let error = error {
                 print("[AppDelegate] ❌ Failed to send vitals to API: \(error.localizedDescription)")
+                if self?.DEBUG_MODE == true { print("[AppDelegate] 📊 Buffering vitals due to network error") }
                 self?.bufferVitals(vitals)
                 return
             }
@@ -1427,10 +2098,23 @@ import HealthKit
             if let httpResponse = response as? HTTPURLResponse {
                 if httpResponse.statusCode == 200 || httpResponse.statusCode == 201 {
                     print("[AppDelegate] ✅ Vitals forwarded to Django (HR=\(vitals["heart_rate"] ?? 0))")
+
+                    // Debug: Log response details
+                    if self?.DEBUG_MODE == true, let data = data {
+                        if let responseStr = String(data: data, encoding: .utf8) {
+                            let preview = String(responseStr.prefix(100))
+                            print("[AppDelegate] 📊 API Response: \(preview)...")
+                        }
+                    }
+
                     // Try to send any buffered vitals
                     self?.sendBufferedVitals()
                 } else {
                     print("[AppDelegate] ❌ API error: \(httpResponse.statusCode)")
+                    if self?.DEBUG_MODE == true, let data = data {
+                        let errorStr = String(data: data, encoding: .utf8) ?? "no body"
+                        print("[AppDelegate] 📊 Error body: \(errorStr)")
+                    }
                     self?.bufferVitals(vitals)
                 }
             }
@@ -1459,6 +2143,28 @@ import HealthKit
         }
     }
 
+    // MARK: - Forward Fall Alert to Django API (High Priority)
+
+    private func forwardFallAlertToDjango(fallData: [String: Any]) {
+        print("[AppDelegate] 🚨 Forwarding fall alert to Django API")
+
+        // Convert fall alert to vitals format for API
+        var vitals: [String: Any] = [:]
+        vitals["fall_detected"] = true
+        vitals["heart_rate"] = fallData["heart_rate"] ?? 0
+        vitals["blood_oxygen"] = fallData["blood_oxygen"] ?? 0
+        vitals["timestamp"] = fallData["timestamp"] ?? ISO8601DateFormatter().string(from: Date())
+
+        // Include fall-specific data as extra fields
+        // The API should handle these additional fields
+        vitals["fall_severity"] = fallData["severity"] ?? "unknown"
+        vitals["fall_impact_g"] = fallData["impact_g"] ?? 0
+        vitals["fall_requires_response"] = fallData["requires_response"] ?? true
+
+        // Use the same forwarding mechanism
+        forwardVitalsToDjango(vitals: vitals)
+    }
+
     // Receive application context updates from Watch (background delivery)
     func session(_ session: WCSession, didReceiveApplicationContext applicationContext: [String : Any]) {
         print("[AppDelegate] Received application context from Watch: \(applicationContext.keys)")
@@ -1473,6 +2179,180 @@ import HealthKit
             DispatchQueue.main.async {
                 self.watchVitalsChannel?.invokeMethod("onWatchVitalsReceived", arguments: applicationContext)
             }
+        }
+
+        // Handle fall alert via application context (background delivery)
+        if applicationContext["type"] as? String == "fall_alert" {
+            print("[AppDelegate] ⚠️ FALL ALERT received via application context!")
+            print("[AppDelegate] Fall data: severity=\(applicationContext["severity"] ?? "unknown"), impact=\(applicationContext["impact_g"] ?? 0)G")
+
+            // Fall-specific deduplication using timestamp
+            let fallTimestamp = applicationContext["timestamp"] as? String ?? ""
+            let severity = applicationContext["severity"] as? String ?? ""
+            let fallEventKey = "processedFall_\(fallTimestamp)_\(severity)"
+
+            if UserDefaults.standard.bool(forKey: fallEventKey) {
+                print("[AppDelegate] ⚠️ Skipping duplicate fall event (context): \(fallTimestamp)")
+                return
+            }
+
+            // Mark this fall event as processed
+            UserDefaults.standard.set(true, forKey: fallEventKey)
+
+            var fallVitals = applicationContext
+            fallVitals["fall_detected"] = true
+            latestWatchVitals = fallVitals
+
+            // Forward to Django API
+            forwardFallAlertToDjango(fallData: applicationContext)
+
+            // Notify Flutter
+            DispatchQueue.main.async {
+                self.watchVitalsChannel?.invokeMethod("onWatchVitalsReceived", arguments: fallVitals)
+            }
+        }
+    }
+
+    // MARK: - Receive Queued Transfers via transferUserInfo (Guaranteed Delivery)
+
+    /// Handle queued transfers from Watch via transferUserInfo
+    /// This method receives data sent with guaranteed delivery - queued on Watch until delivery succeeds
+    func session(_ session: WCSession, didReceiveUserInfo userInfo: [String : Any]) {
+        print("[AppDelegate] 📬 Received userInfo from Watch: \(userInfo.keys)")
+
+        // Debug: Print full payload details
+        if DEBUG_MODE {
+            print("[AppDelegate] 📊 DEBUG transferUserInfo Payload:")
+            if let type = userInfo["type"] as? String { print("  Type: \(type)") }
+            if let hr = userInfo["heart_rate"] as? Double { print("  HR: \(Int(hr)) BPM") }
+            if let o2 = userInfo["blood_oxygen"] as? Double { print("  O2: \(Int(o2))%") }
+            if let steps = userInfo["steps"] as? Int { print("  Steps: \(steps)") }
+            if let calories = userInfo["calories"] as? Int { print("  Calories: \(calories)") }
+            if let transferId = userInfo["transfer_id"] as? String { print("  Transfer ID: \(transferId.prefix(8))...") }
+            if let timestamp = userInfo["transfer_timestamp"] as? Double {
+                let date = Date(timeIntervalSince1970: timestamp)
+                let formatter = DateFormatter()
+                formatter.dateFormat = "HH:mm:ss"
+                print("  Queued at: \(formatter.string(from: date))")
+            }
+        }
+
+        // Check for transfer_id to deduplicate
+        let transferId = userInfo["transfer_id"] as? String ?? UUID().uuidString
+        let processedKey = "processedTransfer_\(transferId)"
+
+        // Skip if we've already processed this transfer
+        if UserDefaults.standard.bool(forKey: processedKey) {
+            print("[AppDelegate] ⚠️ Skipping duplicate transfer: \(transferId)")
+            return
+        }
+
+        // Mark as processed
+        UserDefaults.standard.set(true, forKey: processedKey)
+
+        // Clean up old processed keys (keep only last 24 hours)
+        cleanupOldTransferKeys()
+
+        // Handle fall alert (high priority)
+        if userInfo["type"] as? String == "fall_alert" {
+            let priority = userInfo["priority"] as? String ?? "normal"
+            print("[AppDelegate] 🚨📬 FALL ALERT via transferUserInfo (priority: \(priority))")
+            print("[AppDelegate] Fall: severity=\(userInfo["severity"] ?? "unknown"), impact=\(userInfo["impact_g"] ?? 0)G")
+
+            // Fall-specific deduplication using timestamp (not transfer_id)
+            // Buffered falls may have different transfer_ids but same timestamp
+            let fallTimestamp = userInfo["timestamp"] as? String ?? ""
+            let severity = userInfo["severity"] as? String ?? ""
+            let fallEventKey = "processedFall_\(fallTimestamp)_\(severity)"
+
+            if UserDefaults.standard.bool(forKey: fallEventKey) {
+                print("[AppDelegate] ⚠️ Skipping duplicate fall event: \(fallTimestamp)")
+                return
+            }
+
+            // Mark this fall event as processed
+            UserDefaults.standard.set(true, forKey: fallEventKey)
+
+            var fallVitals = userInfo
+            fallVitals["fall_detected"] = true
+            fallVitals["delivery_method"] = "transferUserInfo"
+            latestWatchVitals = fallVitals
+
+            // Forward to Django API immediately
+            forwardFallAlertToDjango(fallData: userInfo)
+
+            // Notify Flutter
+            DispatchQueue.main.async {
+                self.watchVitalsChannel?.invokeMethod("onWatchVitalsReceived", arguments: fallVitals)
+            }
+            return
+        }
+
+        // Handle watch vitals
+        if userInfo["type"] as? String == "watch_vitals" {
+            print("[AppDelegate] 📬 Vitals via transferUserInfo (guaranteed delivery)")
+
+            var vitals = userInfo
+            vitals["delivery_method"] = "transferUserInfo"
+            latestWatchVitals = vitals
+
+            // Forward to Django API
+            forwardVitalsToDjango(vitals: userInfo)
+
+            // Notify Flutter
+            DispatchQueue.main.async {
+                self.watchVitalsChannel?.invokeMethod("onWatchVitalsReceived", arguments: vitals)
+            }
+            return
+        }
+
+        print("[AppDelegate] ⚠️ Unknown userInfo type: \(userInfo["type"] ?? "nil")")
+    }
+
+    /// Clean up old transfer and fall event keys to prevent UserDefaults bloat
+    private func cleanupOldTransferKeys() {
+        let defaults = UserDefaults.standard
+        let dictionary = defaults.dictionaryRepresentation()
+
+        // We use a simple counter-based cleanup to avoid expensive operations
+        let cleanupKey = "lastTransferCleanup"
+        let cleanupCount = defaults.integer(forKey: cleanupKey)
+
+        // Only cleanup every 100 transfers
+        if cleanupCount > 100 {
+            defaults.set(0, forKey: cleanupKey)
+
+            // Clean up old transfer keys
+            var transferKeysToRemove: [String] = []
+            for key in dictionary.keys where key.hasPrefix("processedTransfer_") {
+                transferKeysToRemove.append(key)
+            }
+
+            // Keep only the last 50 transfer IDs
+            if transferKeysToRemove.count > 50 {
+                let keysToDelete = Array(transferKeysToRemove.prefix(transferKeysToRemove.count - 50))
+                for key in keysToDelete {
+                    defaults.removeObject(forKey: key)
+                }
+                print("[AppDelegate] 🧹 Cleaned up \(keysToDelete.count) old transfer keys")
+            }
+
+            // Clean up old fall event keys
+            var fallKeysToRemove: [String] = []
+            for key in dictionary.keys where key.hasPrefix("processedFall_") {
+                fallKeysToRemove.append(key)
+            }
+
+            // Keep only the last 100 fall events (falls are more important to track)
+            if fallKeysToRemove.count > 100 {
+                let keysToDelete = Array(fallKeysToRemove.prefix(fallKeysToRemove.count - 100))
+                for key in keysToDelete {
+                    defaults.removeObject(forKey: key)
+                }
+                print("[AppDelegate] 🧹 Cleaned up \(keysToDelete.count) old fall event keys")
+            }
+        } else {
+            defaults.set(cleanupCount + 1, forKey: cleanupKey)
         }
     }
 
