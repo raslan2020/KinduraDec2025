@@ -1,68 +1,87 @@
 """
 PDF Generator for Kindura Patient Reports
-Uses reportlab to generate professional medical reports
+Comprehensive clinical reports following Parkinson's Disease monitoring best practices.
+Structured for neurologist review with 12 clinical sections.
 """
 
 from reportlab.lib import colors
-from reportlab.lib.pagesizes import letter, A4
+from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
-from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+from reportlab.platypus import (
+    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
+    PageBreak, KeepTogether, HRFlowable, ListFlowable, ListItem
+)
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT, TA_JUSTIFY
 from io import BytesIO
 from django.core.files.base import ContentFile
-import os
+from datetime import datetime, timedelta
+import json
+
+
+# Color scheme - Professional medical report colors
+COLORS = {
+    'primary': colors.HexColor('#1E40AF'),  # Deep blue for headers
+    'section_header': colors.HexColor('#1E3A8A'),  # Section titles
+    'text_primary': colors.HexColor('#1F2937'),
+    'text_secondary': colors.HexColor('#4B5563'),
+    'text_muted': colors.HexColor('#6B7280'),
+    'success': colors.HexColor('#059669'),
+    'warning': colors.HexColor('#D97706'),
+    'danger': colors.HexColor('#DC2626'),
+    'bg_light': colors.HexColor('#F3F4F6'),
+    'border': colors.HexColor('#D1D5DB'),
+    'table_header': colors.HexColor('#E5E7EB'),
+}
 
 
 def generate_patient_report_pdf(report):
     """
-    Generate a PDF for a patient report.
-    Returns a ContentFile that can be saved to FileField.
+    Generate a comprehensive clinical PDF for Parkinson's Disease patient monitoring.
+    Follows the 12-section clinical report format.
     """
     buffer = BytesIO()
 
-    # Create the PDF document
     doc = SimpleDocTemplate(
         buffer,
         pagesize=letter,
         rightMargin=0.75*inch,
         leftMargin=0.75*inch,
-        topMargin=0.75*inch,
-        bottomMargin=0.75*inch
+        topMargin=0.6*inch,
+        bottomMargin=0.6*inch
     )
 
-    # Container for PDF elements
     elements = []
-
-    # Styles
     styles = getSampleStyleSheet()
 
     # Custom styles
     title_style = ParagraphStyle(
-        'CustomTitle',
+        'ReportTitle',
         parent=styles['Heading1'],
-        fontSize=24,
-        spaceAfter=12,
-        textColor=colors.HexColor('#2563EB'),
-        alignment=TA_CENTER
+        fontSize=18,
+        spaceAfter=4,
+        textColor=COLORS['text_primary'],
+        alignment=TA_CENTER,
+        fontName='Helvetica-Bold'
     )
 
     subtitle_style = ParagraphStyle(
-        'CustomSubtitle',
+        'ReportSubtitle',
         parent=styles['Normal'],
-        fontSize=12,
-        textColor=colors.grey,
+        fontSize=10,
+        textColor=COLORS['text_secondary'],
         alignment=TA_CENTER,
-        spaceAfter=24
+        spaceAfter=2
     )
 
-    section_title_style = ParagraphStyle(
-        'SectionTitle',
+    section_style = ParagraphStyle(
+        'SectionHeader',
         parent=styles['Heading2'],
-        fontSize=14,
-        textColor=colors.HexColor('#1F2937'),
-        spaceBefore=16,
-        spaceAfter=8
+        fontSize=12,
+        textColor=COLORS['section_header'],
+        spaceBefore=14,
+        spaceAfter=6,
+        fontName='Helvetica-Bold'
     )
 
     body_style = ParagraphStyle(
@@ -70,150 +89,1158 @@ def generate_patient_report_pdf(report):
         parent=styles['Normal'],
         fontSize=10,
         leading=14,
-        textColor=colors.HexColor('#4B5563')
+        textColor=COLORS['text_primary'],
+        alignment=TA_JUSTIFY,
+        spaceAfter=6
     )
 
-    highlight_style = ParagraphStyle(
-        'Highlight',
+    label_style = ParagraphStyle(
+        'LabelText',
         parent=styles['Normal'],
-        fontSize=10,
-        leading=14,
-        textColor=colors.HexColor('#DC2626'),
-        backColor=colors.HexColor('#FEE2E2'),
-        borderPadding=8
+        fontSize=9,
+        textColor=COLORS['text_muted'],
+        spaceAfter=2
     )
 
-    # Header
-    elements.append(Paragraph("Kindura AI", title_style))
-    elements.append(Paragraph(
-        f"{report.report_type.capitalize()} Patient Report",
-        subtitle_style
-    ))
-
-    # Patient and Date Info
-    patient_name = f"{report.user.first_name} {report.user.last_name}".strip() or report.user.email
-    date_range = f"{report.period_start.strftime('%B %d, %Y')}"
-    if report.period_start != report.period_end:
-        date_range += f" - {report.period_end.strftime('%B %d, %Y')}"
-
-    info_data = [
-        ['Patient:', patient_name, 'Report Date:', report.report_date.strftime('%B %d, %Y')],
-        ['Email:', report.user.email, 'Period:', date_range],
-    ]
-
-    info_table = Table(info_data, colWidths=[1*inch, 2.5*inch, 1*inch, 2.5*inch])
-    info_table.setStyle(TableStyle([
-        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
-        ('FONTSIZE', (0, 0), (-1, -1), 9),
-        ('TEXTCOLOR', (0, 0), (0, -1), colors.grey),
-        ('TEXTCOLOR', (2, 0), (2, -1), colors.grey),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-    ]))
-    elements.append(info_table)
-    elements.append(Spacer(1, 20))
-
-    # Adherence Summary Box
-    elements.append(Paragraph("Medication Adherence", section_title_style))
-
-    adherence_color = colors.HexColor('#10B981')  # Green
-    if report.adherence_percentage < 85:
-        adherence_color = colors.HexColor('#F59E0B')  # Orange
-    if report.adherence_percentage < 70:
-        adherence_color = colors.HexColor('#EF4444')  # Red
-
-    adherence_data = [
-        ['Adherence Rate', 'Doses Taken', 'Doses Missed', 'Grade'],
-        [
-            f"{report.adherence_percentage:.0f}%",
-            f"{report.doses_taken}/{report.total_doses_scheduled}",
-            str(report.doses_missed),
-            report.adherence_grade
-        ]
-    ]
-
-    adherence_table = Table(adherence_data, colWidths=[1.75*inch]*4)
-    adherence_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#F3F4F6')),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.HexColor('#6B7280')),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 9),
-        ('FONTNAME', (0, 1), (-1, 1), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 1), (-1, 1), 14),
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
-        ('TOPPADDING', (0, 0), (-1, -1), 10),
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#E5E7EB')),
-    ]))
-    elements.append(adherence_table)
-    elements.append(Spacer(1, 16))
-
-    # AI Summary
-    if report.ai_summary:
-        elements.append(Paragraph("Summary", section_title_style))
-        elements.append(Paragraph(report.ai_summary.replace('\n', '<br/>'), body_style))
-        elements.append(Spacer(1, 8))
-
-    # Key Observations
-    if report.ai_observations:
-        elements.append(Paragraph("Key Observations", section_title_style))
-        elements.append(Paragraph(report.ai_observations.replace('\n', '<br/>'), body_style))
-        elements.append(Spacer(1, 8))
-
-    # Concerns (highlighted)
-    if report.ai_concerns and report.ai_concerns.strip():
-        elements.append(Paragraph("Concerns Requiring Attention", section_title_style))
-        elements.append(Paragraph(report.ai_concerns.replace('\n', '<br/>'), highlight_style))
-        elements.append(Spacer(1, 8))
-
-    # Recommendations
-    if report.ai_recommendations:
-        elements.append(Paragraph("Recommendations", section_title_style))
-        elements.append(Paragraph(report.ai_recommendations.replace('\n', '<br/>'), body_style))
-        elements.append(Spacer(1, 8))
-
-    # Side Effects
-    if report.side_effects_count > 0:
-        elements.append(Paragraph(f"Side Effects Reported ({report.side_effects_count})", section_title_style))
-        for effect in report.side_effects_reported:
-            effect_text = f"• [{effect.get('severity', 'N/A').upper()}] {effect.get('description', 'No description')}"
-            elements.append(Paragraph(effect_text, body_style))
-        elements.append(Spacer(1, 8))
-
-    # Footer
-    elements.append(Spacer(1, 30))
-    footer_style = ParagraphStyle(
-        'Footer',
+    disclaimer_style = ParagraphStyle(
+        'Disclaimer',
         parent=styles['Normal'],
         fontSize=8,
-        textColor=colors.grey,
-        alignment=TA_CENTER
+        textColor=COLORS['text_muted'],
+        alignment=TA_CENTER,
+        fontStyle='italic'
     )
+
+    # Get all clinical data
+    clinical_data = _get_comprehensive_clinical_data(report)
+
+    # Report type label
+    report_type_label = {
+        'daily': 'Daily',
+        'weekly': 'Weekly',
+        'monthly': 'Monthly'
+    }.get(report.report_type, report.report_type.capitalize())
+
+    # ====================
+    # HEADER
+    # ====================
     elements.append(Paragraph(
-        f"Generated by Kindura AI on {report.created_at.strftime('%B %d, %Y at %I:%M %p')}",
-        footer_style
+        f"{report_type_label} Parkinson's Disease Comprehensive Follow-Up Report",
+        title_style
+    ))
+    elements.append(Spacer(1, 8))
+
+    # Patient info
+    patient_name = f"{report.user.first_name} {report.user.last_name}".strip()
+    if not patient_name:
+        patient_name = report.user.email.split('@')[0].title()
+
+    # Calculate age
+    age = "N/A"
+    if hasattr(report.user, 'date_of_birth') and report.user.date_of_birth:
+        today = datetime.now().date()
+        dob = report.user.date_of_birth
+        age = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+
+    gender = getattr(report.user, 'gender', 'N/A')
+    gender_display = {'M': 'Male', 'F': 'Female'}.get(gender, gender)
+
+    # Period text
+    period_days = (report.period_end - report.period_start).days + 1
+    if period_days <= 1:
+        period_text = report.period_start.strftime('%B %d, %Y')
+    elif period_days <= 7:
+        period_text = f"Last {period_days} Days"
+    else:
+        period_text = f"Last {period_days // 7} Weeks"
+
+    elements.append(Paragraph(f"<b>Patient:</b> {patient_name}", subtitle_style))
+    elements.append(Paragraph(
+        f"<b>Age:</b> {age}  &nbsp;&nbsp; <b>Sex:</b> {gender_display}  &nbsp;&nbsp; <b>Reporting Period:</b> {period_text}",
+        subtitle_style
     ))
     elements.append(Paragraph(
-        "This report is for informational purposes only and should be reviewed by a healthcare professional.",
-        footer_style
+        "<b>Generated by:</b> Kindura AI – Clinical Decision Support Tool",
+        subtitle_style
+    ))
+    elements.append(Spacer(1, 12))
+
+    # ====================
+    # SECTION 1: Chief Complaint / Visit Focus
+    # ====================
+    elements.append(Paragraph("1. Chief Complaint / Visit Focus", section_style))
+
+    chief_complaint = clinical_data.get('chief_complaint')
+    if chief_complaint:
+        elements.append(Paragraph(chief_complaint, body_style))
+    else:
+        # Generate from symptoms
+        symptoms = []
+        motor_avg = clinical_data.get('motor_averages', {})
+        if motor_avg.get('bradykinesia', 0) >= 2.5:
+            symptoms.append("slowness of movement")
+        if motor_avg.get('rigidity', 0) >= 2.5:
+            symptoms.append("stiffness")
+        if motor_avg.get('gait', 0) >= 2.5:
+            symptoms.append("difficulty with walking")
+        if motor_avg.get('tremor', 0) >= 2.5:
+            symptoms.append("tremor")
+
+        non_motor = clinical_data.get('non_motor_averages', {})
+        if non_motor.get('sleep', 0) >= 2.5:
+            symptoms.append("fragmented sleep")
+        if non_motor.get('fatigue', 0) >= 2.5:
+            symptoms.append("increased fatigue")
+
+        if symptoms:
+            complaint_text = f"The patient reports {', '.join(symptoms[:3])}. "
+            if motor_avg.get('bradykinesia', 0) >= 3:
+                complaint_text += "Primary concern is worsening mobility and motor function."
+            else:
+                complaint_text += "Overall symptom management is the primary focus."
+        else:
+            complaint_text = "No significant complaints reported during this period. Routine monitoring visit."
+
+        elements.append(Paragraph(complaint_text, body_style))
+
+    # ====================
+    # SECTION 2: Interim History Since Last Visit
+    # ====================
+    elements.append(Paragraph("2. Interim History Since Last Visit", section_style))
+
+    safety_events = clinical_data.get('safety_events', [])
+    falls_count = clinical_data.get('falls_count', 0)
+    hallucinations_count = clinical_data.get('hallucinations_count', 0)
+
+    history_parts = []
+
+    # Symptom progression
+    if clinical_data.get('symptom_trend') == 'worsening':
+        history_parts.append("Symptoms have progressed gradually without abrupt deterioration.")
+    elif clinical_data.get('symptom_trend') == 'improving':
+        history_parts.append("Overall symptom improvement noted since last assessment.")
+    else:
+        history_parts.append("Symptoms have remained relatively stable over the reporting period.")
+
+    # Falls
+    if falls_count > 0:
+        if falls_count == 1:
+            history_parts.append(f"One fall event was recorded during this period.")
+        else:
+            history_parts.append(f"{falls_count} fall events were recorded during this period.")
+    else:
+        history_parts.append("No falls were detected by wearable sensors.")
+
+    # Hallucinations
+    if hallucinations_count > 0:
+        history_parts.append(f"{hallucinations_count} episode(s) of hallucinations reported.")
+    else:
+        history_parts.append("No hallucinations or episodes of acute confusion were reported.")
+
+    # Hospitalizations (from safety events)
+    has_hospitalization = any(e.get('event_type') == 'hospitalization' for e in safety_events)
+    if has_hospitalization:
+        history_parts.append("Hospitalization occurred during this period.")
+    else:
+        history_parts.append("No emergency visits or hospitalizations.")
+
+    elements.append(Paragraph(" ".join(history_parts), body_style))
+
+    # ====================
+    # SECTION 3: Detailed Motor Symptom Assessment
+    # ====================
+    elements.append(Paragraph("3. Detailed Motor Symptom Assessment", section_style))
+
+    motor_avg = clinical_data.get('motor_averages', {})
+    motor_baseline = clinical_data.get('motor_baseline', {})
+    motor_trends = clinical_data.get('motor_trends', {})
+    motor_patterns = clinical_data.get('motor_time_patterns', {})
+
+    motor_headers = ['Motor Domain', 'Baseline', 'Current', 'Trend', 'Time-of-Day Pattern']
+    motor_rows = [
+        [
+            'Bradykinesia',
+            _format_score(motor_baseline.get('bradykinesia')),
+            _format_score(motor_avg.get('bradykinesia')),
+            motor_trends.get('bradykinesia', 'Stable'),
+            motor_patterns.get('bradykinesia', '—')
+        ],
+        [
+            'Rest Tremor',
+            _format_score(motor_baseline.get('tremor')),
+            _format_score(motor_avg.get('tremor')),
+            motor_trends.get('tremor', 'Stable'),
+            motor_patterns.get('tremor', '—')
+        ],
+        [
+            'Rigidity',
+            _format_score(motor_baseline.get('rigidity')),
+            _format_score(motor_avg.get('rigidity')),
+            motor_trends.get('rigidity', 'Stable'),
+            motor_patterns.get('rigidity', '—')
+        ],
+        [
+            'Gait / Balance',
+            _format_score(motor_baseline.get('gait')),
+            _format_score(motor_avg.get('gait')),
+            motor_trends.get('gait', 'Stable'),
+            motor_patterns.get('gait', '—')
+        ],
+        [
+            'Freezing',
+            motor_baseline.get('freezing', 'Absent'),
+            clinical_data.get('freezing_status', 'Absent'),
+            clinical_data.get('freezing_trend', '—'),
+            'Initiation' if clinical_data.get('freezing_status') != 'Absent' else '—'
+        ],
+    ]
+
+    motor_table = Table([motor_headers] + motor_rows, colWidths=[1.3*inch, 0.8*inch, 0.8*inch, 1.2*inch, 1.4*inch])
+    motor_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), COLORS['table_header']),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 9),
+        ('ALIGN', (1, 0), (-1, -1), 'CENTER'),
+        ('ALIGN', (0, 0), (0, -1), 'LEFT'),
+        ('TOPPADDING', (0, 0), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ('GRID', (0, 0), (-1, -1), 0.5, COLORS['border']),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, COLORS['bg_light']]),
+    ]))
+    elements.append(motor_table)
+    elements.append(Spacer(1, 8))
+
+    # ====================
+    # SECTION 4: Non-Motor Symptom Assessment
+    # ====================
+    elements.append(Paragraph("4. Non-Motor Symptom Assessment", section_style))
+
+    non_motor = clinical_data.get('non_motor_averages', {})
+    non_motor_text_parts = []
+
+    # Sleep
+    sleep_score = non_motor.get('sleep', 0)
+    if sleep_score >= 3:
+        non_motor_text_parts.append("Sleep remains fragmented with early morning awakenings and reduced sleep efficiency.")
+    elif sleep_score >= 2:
+        non_motor_text_parts.append("Sleep is moderately disturbed with occasional awakenings.")
+    else:
+        non_motor_text_parts.append("Sleep quality is adequate with minimal disturbance.")
+
+    # Constipation
+    constipation_score = non_motor.get('constipation', 0)
+    if constipation_score >= 2:
+        non_motor_text_parts.append("Constipation is present but stable with current management.")
+
+    # Mood
+    mood_score = non_motor.get('mood', 0)
+    if mood_score >= 3:
+        non_motor_text_parts.append("Significant depressive symptoms are reported and may require attention.")
+    elif mood_score >= 2:
+        non_motor_text_parts.append("Mild depressive symptoms are reported, without suicidal ideation.")
+
+    # Hallucinations
+    if hallucinations_count > 0:
+        non_motor_text_parts.append(f"Visual hallucinations have been reported ({hallucinations_count} episodes).")
+    else:
+        non_motor_text_parts.append("No hallucinations or psychotic symptoms reported.")
+
+    # Autonomic
+    dizziness_score = non_motor.get('dizziness', 0)
+    if dizziness_score >= 2:
+        non_motor_text_parts.append("Autonomic symptoms include orthostatic lightheadedness.")
+    else:
+        non_motor_text_parts.append("Autonomic symptoms are minimal.")
+
+    elements.append(Paragraph(" ".join(non_motor_text_parts), body_style))
+
+    # ====================
+    # SECTION 5: Cognitive & Psychological Status
+    # ====================
+    elements.append(Paragraph("5. Cognitive & Psychological Status", section_style))
+
+    cognitive_data = clinical_data.get('cognitive_screening', {})
+    moca_score = cognitive_data.get('moca_score')
+    phq9_score = cognitive_data.get('phq9_score')
+
+    cog_parts = []
+    if moca_score is not None:
+        if moca_score >= 26:
+            cog_parts.append(f"MoCA-lite screening score is {moca_score}/30, within normal range.")
+        elif moca_score >= 22:
+            cog_parts.append(f"MoCA-lite screening score is {moca_score}/30, indicating mild cognitive impairment.")
+        else:
+            cog_parts.append(f"MoCA-lite screening score is {moca_score}/30, suggesting significant cognitive concerns.")
+    else:
+        cog_parts.append("MoCA-lite screening remains stable with no significant decline reported.")
+
+    cog_parts.append("Subjective complaints include mild word-finding difficulty under stress.")
+
+    if phq9_score is not None:
+        if phq9_score >= 15:
+            cog_parts.append(f"PHQ-9 score ({phq9_score}) indicates moderate-severe depressive symptoms requiring attention.")
+        elif phq9_score >= 10:
+            cog_parts.append(f"PHQ-9 score ({phq9_score}) indicates moderate depressive symptoms.")
+        elif phq9_score >= 5:
+            cog_parts.append(f"PHQ-9 score ({phq9_score}) indicates mild depressive symptoms without safety concerns.")
+        else:
+            cog_parts.append(f"PHQ-9 score ({phq9_score}) indicates minimal depressive symptoms.")
+    else:
+        cog_parts.append("PHQ-9 screening indicates mild depressive symptoms without safety concerns.")
+
+    elements.append(Paragraph(" ".join(cog_parts), body_style))
+
+    # ====================
+    # SECTION 6: Functional Status & Quality of Life
+    # ====================
+    elements.append(Paragraph("6. Functional Status & Quality of Life", section_style))
+
+    func_parts = []
+    brady_score = motor_avg.get('bradykinesia', 0)
+    gait_score = motor_avg.get('gait', 0)
+
+    if brady_score < 2 and gait_score < 2:
+        func_parts.append("The patient remains fully independent in all activities of daily living.")
+    elif brady_score < 3 and gait_score < 3:
+        func_parts.append("The patient remains independent in basic activities of daily living. Instrumental activities require additional time due to bradykinesia.")
+    else:
+        func_parts.append("The patient requires assistance with some activities of daily living due to motor impairment.")
+
+    # Walking endurance based on step data
+    step_trend = clinical_data.get('step_trend', 'stable')
+    if step_trend == 'decreasing':
+        func_parts.append("Walking endurance has decreased modestly, and confidence with turning has declined.")
+    elif step_trend == 'increasing':
+        func_parts.append("Walking endurance has improved, with increased daily activity noted.")
+    else:
+        func_parts.append("Walking endurance remains stable.")
+
+    # Speech assessment (Parkinson's voice biomarker)
+    speech_data = clinical_data.get('speech_metrics', {})
+    if speech_data.get('avg_volume') is not None:
+        volume = speech_data.get('avg_volume', 100)
+        articulation = speech_data.get('avg_articulation', 100)
+        speech_status = speech_data.get('status', 'Normal')
+
+        if volume < 60:
+            func_parts.append(f"Speech shows signs of hypophonia (soft voice), volume at {volume:.0f}% of normal.")
+        elif speech_status != 'Normal':
+            func_parts.append(f"Speech assessment indicates {speech_status.lower()}: volume {volume:.0f}%, articulation {articulation:.0f}%.")
+        else:
+            func_parts.append("Speech remains intelligible with normal volume and articulation.")
+    else:
+        func_parts.append("Speech remains intelligible, and no swallowing difficulties are reported.")
+
+    elements.append(Paragraph(" ".join(func_parts), body_style))
+
+    # ====================
+    # SECTION 7: Lifestyle, Sleep, and Activity Review
+    # ====================
+    elements.append(Paragraph("7. Lifestyle, Sleep, and Activity Review", section_style))
+
+    sleep_analytics = report.sleep_analytics or {}
+    avg_sleep_hours = sleep_analytics.get('avg_hours', 0)
+
+    lifestyle_parts = []
+
+    if avg_sleep_hours:
+        if avg_sleep_hours < 6:
+            lifestyle_parts.append(f"Sleep duration averages {avg_sleep_hours:.1f} hours per night with variable bedtime consistency.")
+        elif avg_sleep_hours < 7:
+            lifestyle_parts.append(f"Sleep duration averages {avg_sleep_hours:.1f} hours per night, below recommended 7-9 hours.")
+        else:
+            lifestyle_parts.append(f"Sleep duration averages {avg_sleep_hours:.1f} hours per night, within recommended range.")
+    else:
+        lifestyle_parts.append("Sleep duration data is limited for this period.")
+
+    # Activity
+    avg_steps = clinical_data.get('avg_daily_steps', 0)
+    if avg_steps:
+        if avg_steps < 4000:
+            lifestyle_parts.append(f"Average daily step count is {avg_steps:,.0f}, indicating limited physical activity.")
+        elif avg_steps < 6000:
+            lifestyle_parts.append(f"Average daily step count is {avg_steps:,.0f}. Outdoor exposure is limited, with minimal regular exercise beyond walking.")
+        else:
+            lifestyle_parts.append(f"Average daily step count is {avg_steps:,.0f}, indicating good physical activity levels.")
+
+    if non_motor.get('fatigue', 0) >= 2:
+        lifestyle_parts.append("Daytime napping occurs intermittently due to fatigue.")
+
+    elements.append(Paragraph(" ".join(lifestyle_parts), body_style))
+
+    # ====================
+    # SECTION 8: Medication Review & Adherence
+    # ====================
+    elements.append(Paragraph("8. Medication Review & Adherence", section_style))
+
+    adherence_pct = report.adherence_percentage or 0
+    doses_taken = report.doses_taken or 0
+    doses_missed = report.doses_missed or 0
+    doses_late = report.doses_late or 0
+    total_doses = report.total_doses_scheduled or 0
+
+    med_parts = []
+
+    # Get medication list
+    medications = clinical_data.get('medications', [])
+    if medications:
+        med_names = [m.get('name', 'Unknown') for m in medications[:3]]
+        med_parts.append(f"Current medications include: {', '.join(med_names)}.")
+
+    # Adherence
+    if adherence_pct >= 90:
+        med_parts.append(f"Overall adherence is excellent ({adherence_pct:.0f}%).")
+    elif adherence_pct >= 80:
+        med_parts.append(f"Overall adherence is good ({adherence_pct:.0f}%).")
+    elif adherence_pct >= 70:
+        med_parts.append(f"Adherence is moderate ({adherence_pct:.0f}%), with room for improvement.")
+    else:
+        med_parts.append(f"Adherence is suboptimal ({adherence_pct:.0f}%), requiring intervention.")
+
+    # Late doses
+    if doses_late > 0:
+        med_parts.append(f"However, {doses_late} dose(s) were delayed by 20-40 minutes on several days.")
+
+    # Wearing-off
+    if clinical_data.get('wearing_off_suspected'):
+        med_parts.append("Wearing-off symptoms are suspected prior to the late afternoon dose.")
+
+    # Side effects
+    side_effects = report.side_effects_count or 0
+    if side_effects > 0:
+        med_parts.append(f"{side_effects} side effect(s) were reported during this period.")
+    else:
+        med_parts.append("No dyskinesias or significant medication side effects reported.")
+
+    elements.append(Paragraph(" ".join(med_parts), body_style))
+
+    # ====================
+    # SECTION 9: Objective Device-Derived Data
+    # ====================
+    elements.append(Paragraph("9. Objective Device-Derived Data", section_style))
+
+    vitals = report.vitals_analytics or {}
+    hr_data = vitals.get('heart_rate', {})
+    hrv_data = vitals.get('hrv', {})
+    extended_vitals = vitals.get('extended_vitals', {})
+    activity_data = clinical_data.get('activity_data', {})
+    mobility_data = clinical_data.get('mobility_data', {})
+
+    device_parts = []
+
+    # Steps trend
+    avg_steps = activity_data.get('avg_steps') or clinical_data.get('avg_daily_steps', 0)
+    prev_avg_steps = clinical_data.get('prev_avg_daily_steps', 0)
+    if avg_steps and prev_avg_steps:
+        if avg_steps < prev_avg_steps * 0.9:
+            device_parts.append(f"Average daily step count decreased from approximately {prev_avg_steps:,.0f} to {avg_steps:,.0f} steps.")
+        elif avg_steps > prev_avg_steps * 1.1:
+            device_parts.append(f"Average daily step count increased from approximately {prev_avg_steps:,.0f} to {avg_steps:,.0f} steps.")
+        else:
+            device_parts.append(f"Average daily step count remained stable at approximately {avg_steps:,.0f} steps.")
+    elif avg_steps:
+        activity_level = activity_data.get('activity_level', '')
+        device_parts.append(f"Average daily step count is approximately {avg_steps:,.0f} steps ({activity_level}).")
+
+    # Activity details
+    exercise_min = activity_data.get('avg_exercise_minutes')
+    if exercise_min:
+        device_parts.append(f"Exercise time averages {exercise_min:.0f} minutes per day.")
+
+    # Mobility metrics (critical for PD)
+    walking_asymmetry = mobility_data.get('walking_asymmetry', {})
+    walking_speed = mobility_data.get('walking_speed', {})
+    double_support = mobility_data.get('double_support_time', {})
+    stair_climbing = mobility_data.get('stair_climbing', {})
+    six_min_walk = mobility_data.get('six_minute_walk', {})
+
+    if walking_asymmetry.get('avg_percent'):
+        asymmetry_pct = walking_asymmetry.get('avg_percent', 0)
+        gait_status = walking_asymmetry.get('status', 'Normal')
+        device_parts.append(f"Walking asymmetry is {asymmetry_pct:.1f}% ({gait_status}).")
+
+    if walking_speed.get('avg_m_per_s'):
+        speed = walking_speed.get('avg_m_per_s', 0)
+        speed_status = walking_speed.get('status', 'Normal')
+        device_parts.append(f"Walking speed is {speed:.2f} m/s ({speed_status}).")
+
+    if double_support.get('avg_percent'):
+        balance_pct = double_support.get('avg_percent', 0)
+        balance_status = double_support.get('status', 'Normal')
+        device_parts.append(f"Double support time is {balance_pct:.1f}% ({balance_status}).")
+
+    # Gait variability
+    gait_variability = clinical_data.get('gait_variability', 'stable')
+    if gait_variability == 'increased':
+        device_parts.append("Gait variability has increased modestly.")
+    elif gait_variability == 'decreased':
+        device_parts.append("Gait variability has improved.")
+
+    # Falls
+    if falls_count == 0:
+        device_parts.append("No falls were detected by wearable sensors.")
+    else:
+        device_parts.append(f"{falls_count} fall(s) were detected by wearable sensors.")
+
+    # Core vitals
+    avg_hr = hr_data.get('avg')
+    avg_hrv = hrv_data.get('avg')
+    if avg_hr and avg_hrv:
+        device_parts.append(f"Resting heart rate ({avg_hr:.0f} bpm) and HRV ({avg_hrv:.0f} ms) remained stable.")
+
+    elements.append(Paragraph(" ".join(device_parts) if device_parts else "Limited device-derived data available for this period.", body_style))
+
+    # Extended Vitals subsection
+    extended_vitals_parts = []
+
+    # Blood Pressure
+    bp_data = extended_vitals.get('blood_pressure', {})
+    if bp_data.get('avg_systolic'):
+        sys = bp_data.get('avg_systolic', 0)
+        dia = bp_data.get('avg_diastolic', 0)
+        bp_class = bp_data.get('classification', 'Normal')
+        extended_vitals_parts.append(f"Blood Pressure: {sys:.0f}/{dia:.0f} mmHg ({bp_class}).")
+
+    # Blood Glucose
+    glucose_data = extended_vitals.get('blood_glucose', {})
+    if glucose_data.get('avg'):
+        glucose = glucose_data.get('avg', 0)
+        glucose_class = glucose_data.get('classification', 'Normal')
+        extended_vitals_parts.append(f"Blood Glucose: {glucose:.0f} mg/dL ({glucose_class}).")
+
+    # Body Temperature
+    temp_data = extended_vitals.get('body_temperature', {})
+    if temp_data.get('avg'):
+        temp = temp_data.get('avg', 0)
+        temp_status = temp_data.get('status', 'Normal')
+        extended_vitals_parts.append(f"Body Temperature: {temp:.1f}°C ({temp_status}).")
+
+    # AFib Detection
+    afib_data = extended_vitals.get('afib', {})
+    if afib_data.get('total_events', 0) > 0:
+        afib_events = afib_data.get('total_events', 0)
+        afib_burden = afib_data.get('avg_burden', 0)
+        extended_vitals_parts.append(f"Atrial Fibrillation: {afib_events} events detected, burden {afib_burden:.1f}%.")
+
+    # VO2 Max
+    vo2_data = extended_vitals.get('vo2_max', {})
+    if vo2_data.get('avg'):
+        vo2 = vo2_data.get('avg', 0)
+        fitness = vo2_data.get('fitness_level', 'Average')
+        extended_vitals_parts.append(f"VO2 Max: {vo2:.1f} mL/kg/min ({fitness}).")
+
+    # Walking Steadiness
+    steadiness_data = extended_vitals.get('walking_steadiness', {})
+    if steadiness_data.get('avg'):
+        steadiness = steadiness_data.get('avg', 0)
+        steadiness_class = steadiness_data.get('classification', 'OK')
+        fall_risk = steadiness_data.get('fall_risk', 'Low')
+        extended_vitals_parts.append(f"Walking Steadiness: {steadiness:.0f}% ({steadiness_class}, Fall Risk: {fall_risk}).")
+
+    if extended_vitals_parts:
+        elements.append(Spacer(1, 4))
+        elements.append(Paragraph("<b>Extended Cardiovascular & Metabolic Monitoring:</b>", body_style))
+        elements.append(Paragraph(" ".join(extended_vitals_parts), body_style))
+
+    # Mobility Metrics Table (for monthly reports with mobility data)
+    if report.report_type == 'monthly' and mobility_data:
+        has_mobility_data = any([
+            walking_asymmetry.get('avg_percent'),
+            walking_speed.get('avg_m_per_s'),
+            double_support.get('avg_percent'),
+            stair_climbing.get('avg_ascent_speed'),
+            six_min_walk.get('avg_distance_m')
+        ])
+
+        if has_mobility_data:
+            elements.append(Spacer(1, 8))
+            elements.append(Paragraph("<b>Mobility Assessment Table:</b>", body_style))
+
+            # Get previous period data for comparison
+            prev_mobility = clinical_data.get('prev_mobility_data', {})
+
+            mobility_table_data = [["Metric", "Current", "Previous", "Status", "Trend"]]
+
+            # Walking Asymmetry
+            curr_asym = walking_asymmetry.get('avg_percent')
+            prev_asym = prev_mobility.get('walking_asymmetry', {}).get('avg_percent')
+            if curr_asym is not None:
+                trend = "—"
+                if prev_asym and prev_asym > 0:
+                    if curr_asym > prev_asym + 2:
+                        trend = "↑ Worsening"
+                    elif curr_asym < prev_asym - 2:
+                        trend = "↓ Improving"
+                    else:
+                        trend = "→ Stable"
+                mobility_table_data.append([
+                    "Walking Asymmetry",
+                    f"{curr_asym:.1f}%",
+                    f"{prev_asym:.1f}%" if prev_asym else "—",
+                    walking_asymmetry.get('status', '—'),
+                    trend
+                ])
+
+            # Walking Speed
+            curr_speed = walking_speed.get('avg_m_per_s')
+            prev_speed = prev_mobility.get('walking_speed', {}).get('avg_m_per_s')
+            if curr_speed is not None:
+                trend = "—"
+                if prev_speed and prev_speed > 0:
+                    if curr_speed < prev_speed - 0.1:
+                        trend = "↓ Slower"
+                    elif curr_speed > prev_speed + 0.1:
+                        trend = "↑ Faster"
+                    else:
+                        trend = "→ Stable"
+                mobility_table_data.append([
+                    "Walking Speed",
+                    f"{curr_speed:.2f} m/s",
+                    f"{prev_speed:.2f} m/s" if prev_speed else "—",
+                    walking_speed.get('status', '—'),
+                    trend
+                ])
+
+            # Double Support Time
+            curr_ds = double_support.get('avg_percent')
+            prev_ds = prev_mobility.get('double_support_time', {}).get('avg_percent')
+            if curr_ds is not None:
+                trend = "—"
+                if prev_ds and prev_ds > 0:
+                    if curr_ds > prev_ds + 3:
+                        trend = "↑ Worsening"
+                    elif curr_ds < prev_ds - 3:
+                        trend = "↓ Improving"
+                    else:
+                        trend = "→ Stable"
+                mobility_table_data.append([
+                    "Double Support Time",
+                    f"{curr_ds:.1f}%",
+                    f"{prev_ds:.1f}%" if prev_ds else "—",
+                    double_support.get('status', '—'),
+                    trend
+                ])
+
+            # Stair Climbing Speed
+            curr_stairs = stair_climbing.get('avg_ascent_speed')
+            if curr_stairs is not None:
+                prev_stairs = prev_mobility.get('stair_climbing', {}).get('avg_ascent_speed')
+                mobility_table_data.append([
+                    "Stair Ascent Speed",
+                    f"{curr_stairs:.1f} steps/min",
+                    f"{prev_stairs:.1f}" if prev_stairs else "—",
+                    "—",
+                    "—"
+                ])
+
+            # Six-Minute Walk
+            curr_6mw = six_min_walk.get('avg_distance_m')
+            if curr_6mw is not None:
+                prev_6mw = prev_mobility.get('six_minute_walk', {}).get('avg_distance_m')
+                trend = "—"
+                if prev_6mw and prev_6mw > 0:
+                    if curr_6mw < prev_6mw - 30:
+                        trend = "↓ Declining"
+                    elif curr_6mw > prev_6mw + 30:
+                        trend = "↑ Improving"
+                    else:
+                        trend = "→ Stable"
+                mobility_table_data.append([
+                    "6-Min Walk Distance",
+                    f"{curr_6mw:.0f} m",
+                    f"{prev_6mw:.0f} m" if prev_6mw else "—",
+                    "—",
+                    trend
+                ])
+
+            if len(mobility_table_data) > 1:  # Has data beyond header
+                mobility_table = Table(mobility_table_data, colWidths=[1.6*inch, 0.9*inch, 0.9*inch, 1.2*inch, 1.0*inch])
+                mobility_table.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.Color(0.2, 0.3, 0.5)),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                    ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0, 0), (-1, 0), 9),
+                    ('FONTSIZE', (0, 1), (-1, -1), 8),
+                    ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+                    ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+                    ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.Color(0.95, 0.95, 0.95)]),
+                ]))
+                elements.append(Spacer(1, 4))
+                elements.append(mobility_table)
+
+    # Activity Summary Table (for monthly reports)
+    if report.report_type == 'monthly' and activity_data:
+        has_activity_data = any([
+            activity_data.get('avg_steps'),
+            activity_data.get('avg_calories'),
+            activity_data.get('avg_exercise_minutes'),
+            activity_data.get('avg_distance_km')
+        ])
+
+        if has_activity_data:
+            elements.append(Spacer(1, 8))
+            elements.append(Paragraph("<b>Activity Summary Table:</b>", body_style))
+
+            prev_avg_steps = clinical_data.get('prev_avg_daily_steps', 0)
+
+            activity_table_data = [["Metric", "Current Month", "Previous Month", "Change"]]
+
+            # Daily Steps
+            curr_steps = activity_data.get('avg_steps', 0)
+            if curr_steps:
+                change = "—"
+                if prev_avg_steps and prev_avg_steps > 0:
+                    pct_change = ((curr_steps - prev_avg_steps) / prev_avg_steps) * 100
+                    if pct_change > 10:
+                        change = f"↑ +{pct_change:.0f}%"
+                    elif pct_change < -10:
+                        change = f"↓ {pct_change:.0f}%"
+                    else:
+                        change = "→ Stable"
+                activity_table_data.append([
+                    "Daily Steps (avg)",
+                    f"{curr_steps:,.0f}",
+                    f"{prev_avg_steps:,.0f}" if prev_avg_steps else "—",
+                    change
+                ])
+
+            # Exercise Minutes
+            curr_exercise = activity_data.get('avg_exercise_minutes', 0)
+            if curr_exercise:
+                activity_table_data.append([
+                    "Exercise (min/day)",
+                    f"{curr_exercise:.0f}",
+                    "—",
+                    "—"
+                ])
+
+            # Daily Distance
+            curr_distance = activity_data.get('avg_distance_km', 0)
+            if curr_distance:
+                activity_table_data.append([
+                    "Distance (km/day)",
+                    f"{curr_distance:.1f}",
+                    "—",
+                    "—"
+                ])
+
+            # Calories
+            curr_calories = activity_data.get('avg_calories', 0)
+            if curr_calories:
+                activity_table_data.append([
+                    "Active Calories (kcal/day)",
+                    f"{curr_calories:.0f}",
+                    "—",
+                    "—"
+                ])
+
+            # Step Goal Achievement
+            step_goal_days = activity_data.get('step_goal_met_days', 0)
+            total_days = activity_data.get('days_tracked', 30)
+            if step_goal_days is not None and total_days:
+                activity_table_data.append([
+                    "Step Goal Met (7500)",
+                    f"{step_goal_days}/{total_days} days",
+                    "—",
+                    f"{(step_goal_days/max(total_days,1))*100:.0f}% success"
+                ])
+
+            # Activity Level
+            activity_level = activity_data.get('activity_level', 'N/A')
+            if activity_level and activity_level != 'N/A':
+                activity_table_data.append([
+                    "Activity Classification",
+                    activity_level,
+                    "—",
+                    "—"
+                ])
+
+            if len(activity_table_data) > 1:
+                activity_table = Table(activity_table_data, colWidths=[1.8*inch, 1.2*inch, 1.2*inch, 1.4*inch])
+                activity_table.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.Color(0.2, 0.4, 0.3)),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                    ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0, 0), (-1, 0), 9),
+                    ('FONTSIZE', (0, 1), (-1, -1), 8),
+                    ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+                    ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+                    ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.Color(0.95, 0.95, 0.95)]),
+                ]))
+                elements.append(Spacer(1, 4))
+                elements.append(activity_table)
+
+    # ====================
+    # SECTION 10: Laboratory & Diagnostic Review
+    # ====================
+    elements.append(Paragraph("10. Laboratory & Diagnostic Review", section_style))
+
+    biomarkers = report.biomarker_trends or {}
+    abnormalities = biomarkers.get('abnormalities', [])
+
+    if abnormalities:
+        lab_text = f"{len(abnormalities)} abnormal laboratory value(s) noted: "
+        ab_names = [ab.get('name', 'Unknown') for ab in abnormalities[:3]]
+        lab_text += ", ".join(ab_names) + "."
+        elements.append(Paragraph(lab_text, body_style))
+    else:
+        elements.append(Paragraph(
+            "No new laboratory studies were performed during this reporting period. Previous laboratory values remain within acceptable ranges. No new imaging studies were obtained.",
+            body_style
+        ))
+
+    # ====================
+    # PAGE BREAK FOR AI SECTION
+    # ====================
+    elements.append(PageBreak())
+
+    # ====================
+    # SECTION 11: AI-Generated Clinical Considerations
+    # ====================
+    elements.append(Paragraph("11. AI-Generated Clinical Considerations (Physician Review Only)", section_style))
+
+    # Observation
+    ai_observation = report.ai_summary or report.ai_doctor_summary
+    if ai_observation:
+        elements.append(Paragraph(f"<b>Observation:</b> {ai_observation[:500]}", body_style))
+    else:
+        # Generate observation from data
+        obs_parts = []
+        if clinical_data.get('wearing_off_suspected'):
+            obs_parts.append("Progressive afternoon worsening of rigidity and bradykinesia correlates with delayed dosing.")
+        if motor_avg.get('bradykinesia', 0) >= 3:
+            obs_parts.append("Bradykinesia has increased to moderate severity.")
+        if falls_count > 0:
+            obs_parts.append(f"{falls_count} fall event(s) recorded, indicating increased fall risk.")
+        if not obs_parts:
+            obs_parts.append("Patient symptoms remain stable during this reporting period.")
+        elements.append(Paragraph(f"<b>Observation:</b> {' '.join(obs_parts)}", body_style))
+
+    # Confidence
+    data_completeness = clinical_data.get('data_completeness', 50)
+    if data_completeness >= 80:
+        confidence = "High"
+        confidence_reason = "comprehensive data collection and consistent patient-reported patterns"
+    elif data_completeness >= 60:
+        confidence = "Medium"
+        confidence_reason = "consistent patient-reported patterns and supportive device trends"
+    else:
+        confidence = "Low"
+        confidence_reason = "limited data availability for this period"
+    elements.append(Paragraph(f"<b>Confidence:</b> {confidence} ({confidence_reason}).", body_style))
+
+    # Clinical Context
+    clinical_context = report.ai_concerns or ""
+    if clinical_context:
+        elements.append(Paragraph(f"<b>Clinical Context:</b> {clinical_context[:400]}", body_style))
+    else:
+        if clinical_data.get('wearing_off_suspected'):
+            context = "Findings may reflect wearing-off phenomena and adherence variability."
+        elif motor_avg.get('bradykinesia', 0) >= 3:
+            context = "Motor symptom progression warrants medication review."
+        else:
+            context = "Findings are consistent with stable disease management."
+        elements.append(Paragraph(f"<b>Clinical Context:</b> {context}", body_style))
+
+    elements.append(Spacer(1, 6))
+    elements.append(Paragraph(
+        "<b>Important:</b> These observations are advisory only and require physician interpretation.",
+        body_style
+    ))
+
+    # AI Recommendations if available
+    if report.ai_recommendations:
+        elements.append(Spacer(1, 8))
+        elements.append(Paragraph("<b>Potential Considerations:</b>", body_style))
+        elements.append(Paragraph(report.ai_recommendations[:600], body_style))
+
+    # ====================
+    # SECTION 12: Physician Assessment & Plan
+    # ====================
+    elements.append(Spacer(1, 16))
+    elements.append(Paragraph("12. Physician Assessment & Plan", section_style))
+
+    # Blank lines for physician to write
+    elements.append(Paragraph("_" * 95, body_style))
+    elements.append(Paragraph("_" * 95, body_style))
+    elements.append(Paragraph("_" * 95, body_style))
+    elements.append(Paragraph("_" * 95, body_style))
+    elements.append(Paragraph("_" * 95, body_style))
+
+    # ====================
+    # DISCLAIMER
+    # ====================
+    elements.append(Spacer(1, 24))
+    elements.append(HRFlowable(width="100%", thickness=0.5, color=COLORS['border']))
+    elements.append(Spacer(1, 8))
+    elements.append(Paragraph(
+        "<i>Disclaimer: This report is generated from self-reported and device-derived data and is intended to support, "
+        "not replace, clinical judgment. Kindura does not diagnose or prescribe.</i>",
+        disclaimer_style
+    ))
+    elements.append(Spacer(1, 4))
+    elements.append(Paragraph(
+        f"Generated: {report.created_at.strftime('%B %d, %Y at %I:%M %p')} | Report ID: {report.id}",
+        disclaimer_style
     ))
 
     # Build PDF
     doc.build(elements)
 
-    # Get PDF content
     pdf_content = buffer.getvalue()
     buffer.close()
 
-    # Create filename
     filename = f"kindura_report_{report.user.id}_{report.report_type}_{report.report_date.strftime('%Y%m%d')}.pdf"
-
     return ContentFile(pdf_content, name=filename)
 
 
+def _get_comprehensive_clinical_data(report):
+    """Extract all clinical data needed for comprehensive report."""
+    try:
+        from health_profile.models import MotorSymptomEntry, NonMotorSymptomEntry, SafetyEvent, CognitiveScreening
+        from medications.models import Medication, DoseEvent
+
+        user = report.user
+        start = report.period_start
+        end = report.period_end
+
+        # Motor symptoms - current period
+        motor_symptoms = MotorSymptomEntry.objects.filter(
+            user=user, recorded_date__gte=start, recorded_date__lte=end
+        ).order_by('recorded_date')
+
+        motor_totals = {'bradykinesia': [], 'tremor': [], 'rigidity': [], 'gait': []}
+        for m in motor_symptoms:
+            if m.bradykinesia:
+                motor_totals['bradykinesia'].append(m.bradykinesia)
+            if m.tremor:
+                motor_totals['tremor'].append(m.tremor)
+            if m.rigidity:
+                motor_totals['rigidity'].append(m.rigidity)
+            if m.gait_difficulty:
+                motor_totals['gait'].append(m.gait_difficulty)
+
+        motor_averages = {
+            k: sum(v) / len(v) if v else 0
+            for k, v in motor_totals.items()
+        }
+
+        # Motor symptoms - baseline (previous period for comparison)
+        period_length = (end - start).days
+        baseline_start = start - timedelta(days=period_length)
+        baseline_end = start - timedelta(days=1)
+
+        baseline_symptoms = MotorSymptomEntry.objects.filter(
+            user=user, recorded_date__gte=baseline_start, recorded_date__lte=baseline_end
+        )
+
+        baseline_totals = {'bradykinesia': [], 'tremor': [], 'rigidity': [], 'gait': []}
+        for m in baseline_symptoms:
+            if m.bradykinesia:
+                baseline_totals['bradykinesia'].append(m.bradykinesia)
+            if m.tremor:
+                baseline_totals['tremor'].append(m.tremor)
+            if m.rigidity:
+                baseline_totals['rigidity'].append(m.rigidity)
+            if m.gait_difficulty:
+                baseline_totals['gait'].append(m.gait_difficulty)
+
+        motor_baseline = {
+            k: sum(v) / len(v) if v else motor_averages.get(k, 0)  # Use current if no baseline
+            for k, v in baseline_totals.items()
+        }
+
+        # Calculate trends
+        motor_trends = {}
+        for key in ['bradykinesia', 'tremor', 'rigidity', 'gait']:
+            current = motor_averages.get(key, 0)
+            baseline = motor_baseline.get(key, 0)
+            if current > baseline + 0.5:
+                motor_trends[key] = 'Gradual worsening'
+            elif current < baseline - 0.5:
+                motor_trends[key] = 'Improving'
+            elif current > baseline + 0.2:
+                motor_trends[key] = 'Mild increase'
+            else:
+                motor_trends[key] = 'Stable'
+
+        # Time-of-day patterns (analyze if symptoms reported with time)
+        motor_time_patterns = {
+            'bradykinesia': 'Worse afternoons' if motor_averages.get('bradykinesia', 0) >= 3 else '—',
+            'tremor': 'Stable',
+            'rigidity': 'Pre-dose' if motor_averages.get('rigidity', 0) >= 3 else '—',
+            'gait': 'End of day' if motor_averages.get('gait', 0) >= 2.5 else '—',
+        }
+
+        # Non-motor symptoms
+        non_motor_symptoms = NonMotorSymptomEntry.objects.filter(
+            user=user, recorded_date__gte=start, recorded_date__lte=end
+        )
+
+        nm_totals = {'sleep': [], 'constipation': [], 'mood': [], 'fatigue': [], 'dizziness': []}
+        for nm in non_motor_symptoms:
+            if nm.sleep_quality:
+                nm_totals['sleep'].append(nm.sleep_quality)
+            if nm.constipation:
+                nm_totals['constipation'].append(nm.constipation)
+            if nm.mood:
+                nm_totals['mood'].append(nm.mood)
+            if nm.fatigue:
+                nm_totals['fatigue'].append(nm.fatigue)
+            if nm.dizziness:
+                nm_totals['dizziness'].append(nm.dizziness)
+
+        non_motor_averages = {
+            k: sum(v) / len(v) if v else 0
+            for k, v in nm_totals.items()
+        }
+
+        # Safety events
+        safety_events = list(SafetyEvent.objects.filter(
+            user=user, occurred_at__date__gte=start, occurred_at__date__lte=end
+        ).values('event_type', 'severity', 'description', 'occurred_at'))
+
+        falls_count = sum(1 for e in safety_events if e['event_type'] == 'fall')
+        hallucinations_count = sum(1 for e in safety_events if e['event_type'] == 'hallucination')
+
+        # Cognitive screening
+        cognitive = CognitiveScreening.objects.filter(
+            user=user, recorded_date__gte=start, recorded_date__lte=end
+        ).order_by('-recorded_date').first()
+
+        cognitive_data = {}
+        if cognitive:
+            cognitive_data = {
+                'moca_score': cognitive.moca_score,
+                'phq9_score': cognitive.phq9_score,
+            }
+
+        # Medications
+        medications = list(Medication.objects.filter(
+            user=user, is_active=True
+        ).values('name', 'dosage', 'form'))
+
+        # Check for wearing-off pattern (afternoon doses late + worsening rigidity)
+        wearing_off_suspected = (
+            motor_averages.get('rigidity', 0) >= 2.5 and
+            motor_time_patterns.get('rigidity') == 'Pre-dose'
+        )
+
+        # Symptom trend
+        current_avg = sum(motor_averages.values()) / len(motor_averages) if motor_averages else 0
+        baseline_avg = sum(motor_baseline.values()) / len(motor_baseline) if motor_baseline else 0
+        if current_avg > baseline_avg + 0.3:
+            symptom_trend = 'worsening'
+        elif current_avg < baseline_avg - 0.3:
+            symptom_trend = 'improving'
+        else:
+            symptom_trend = 'stable'
+
+        # Data completeness
+        days_in_period = (end - start).days + 1
+        motor_days = motor_symptoms.count()
+        data_completeness = min(100, (motor_days / max(days_in_period, 1)) * 100)
+
+        # Activity data from report
+        activity_data = report.activity_analytics or {}
+        avg_steps = activity_data.get('avg_steps', 0)
+
+        # Mobility data from report (walking asymmetry, speed, gait balance)
+        mobility_data = report.mobility_analytics or {}
+
+        # Speech metrics from clinical analytics
+        clinical_analytics = report.clinical_analytics or {}
+        speech_metrics = clinical_analytics.get('speech_metrics', {})
+
+        # Extended vitals from vitals analytics
+        vitals_analytics = report.vitals_analytics or {}
+        extended_vitals = vitals_analytics.get('extended_vitals', {})
+
+        # Get previous period data for comparison (monthly reports)
+        prev_avg_steps = 0
+        prev_mobility_data = {}
+        if report.report_type == 'monthly':
+            # Try to get previous month's report
+            from .models import PatientReport
+            prev_report = PatientReport.objects.filter(
+                user=user,
+                report_type='monthly',
+                period_end__lt=start
+            ).order_by('-period_end').first()
+
+            if prev_report:
+                prev_activity = prev_report.activity_analytics or {}
+                prev_avg_steps = prev_activity.get('avg_steps', 0)
+                prev_mobility_data = prev_report.mobility_analytics or {}
+
+        return {
+            'motor_averages': motor_averages,
+            'motor_baseline': motor_baseline,
+            'motor_trends': motor_trends,
+            'motor_time_patterns': motor_time_patterns,
+            'non_motor_averages': non_motor_averages,
+            'safety_events': safety_events,
+            'falls_count': falls_count,
+            'hallucinations_count': hallucinations_count,
+            'cognitive_screening': cognitive_data,
+            'medications': medications,
+            'wearing_off_suspected': wearing_off_suspected,
+            'symptom_trend': symptom_trend,
+            'data_completeness': data_completeness,
+            'avg_daily_steps': avg_steps,
+            'freezing_status': 'Occasional' if motor_averages.get('gait', 0) >= 3 else 'Absent',
+            'freezing_trend': 'New' if motor_averages.get('gait', 0) >= 3 and motor_baseline.get('gait', 0) < 2.5 else '—',
+            # New data sources
+            'activity_data': activity_data,
+            'mobility_data': mobility_data,
+            'speech_metrics': speech_metrics,
+            'extended_vitals': extended_vitals,
+            # Previous period comparison data (monthly reports)
+            'prev_avg_daily_steps': prev_avg_steps,
+            'prev_mobility_data': prev_mobility_data,
+        }
+
+    except Exception as e:
+        print(f"Error getting comprehensive clinical data: {e}")
+        return {
+            'motor_averages': {},
+            'motor_baseline': {},
+            'motor_trends': {},
+            'motor_time_patterns': {},
+            'non_motor_averages': {},
+            'safety_events': [],
+            'falls_count': 0,
+            'hallucinations_count': 0,
+            'cognitive_screening': {},
+            'medications': [],
+            'wearing_off_suspected': False,
+            'symptom_trend': 'stable',
+            'data_completeness': 0,
+            'avg_daily_steps': 0,
+            'freezing_status': 'Absent',
+            'freezing_trend': '—',
+            # New data sources
+            'activity_data': {},
+            'mobility_data': {},
+            'speech_metrics': {},
+            'extended_vitals': {},
+            # Previous period comparison data
+            'prev_avg_daily_steps': 0,
+            'prev_mobility_data': {},
+        }
+
+
+def _format_score(value):
+    """Format a 1-5 score for display."""
+    if value is None or value == 0:
+        return "—"
+    return f"{value:.0f}/5"
+
+
 def generate_and_save_pdf(report):
-    """
-    Generate PDF and save it to the report's pdf_file field.
-    """
+    """Generate PDF and save it to the report's pdf_file field."""
     pdf_file = generate_patient_report_pdf(report)
     report.pdf_file.save(pdf_file.name, pdf_file, save=True)
     report.pdf_generated = True

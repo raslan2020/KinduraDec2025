@@ -13,6 +13,7 @@
 		2A1234560007 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2A1234560008 /* Assets.xcassets */; };
 		2A123456001D /* ConfigurationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A123456001E /* ConfigurationManager.swift */; };
 		2A123456001F /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A1234560020 /* SettingsView.swift */; };
+		2A1234560021 /* MedicationReminderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A1234560022 /* MedicationReminderView.swift */; };
 		2FE7724E2EFD6D2E001E0C03 /* HealthKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2A123456000A /* HealthKit.framework */; };
 /* End PBXBuildFile section */
 
@@ -27,6 +28,7 @@
 		2A123456000D /* KinduraWatch.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = KinduraWatch.entitlements; sourceTree = "<group>"; };
 		2A123456001E /* ConfigurationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfigurationManager.swift; sourceTree = "<group>"; };
 		2A1234560020 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		2A1234560022 /* MedicationReminderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MedicationReminderView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -58,6 +60,7 @@
 				2A1234560006 /* HealthManager.swift */,
 				2A123456001E /* ConfigurationManager.swift */,
 				2A1234560020 /* SettingsView.swift */,
+				2A1234560022 /* MedicationReminderView.swift */,
 				2A1234560008 /* Assets.xcassets */,
 				2A123456000C /* Info.plist */,
 				2A123456000D /* KinduraWatch.entitlements */,
@@ -155,6 +158,7 @@
 				2A1234560005 /* HealthManager.swift in Sources */,
 				2A123456001D /* ConfigurationManager.swift in Sources */,
 				2A123456001F /* SettingsView.swift in Sources */,
+				2A1234560021 /* MedicationReminderView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

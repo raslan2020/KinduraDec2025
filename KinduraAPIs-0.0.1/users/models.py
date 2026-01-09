@@ -74,6 +74,32 @@ class User(AbstractUser):
         help_text='Allow Kindura AI to mark medications as taken/missed via voice commands'
     )
 
+    # Extended health vitals collection
+    extended_vitals_enabled = models.BooleanField(
+        default=False,
+        help_text='Enable collection of extended HealthKit vitals (walking steadiness, blood glucose, VO2 max, mobility metrics, etc.)'
+    )
+
+    # Vitals data retention period
+    VITALS_RETENTION_CHOICES = [
+        (30, '30 days'),
+        (60, '60 days'),
+    ]
+    vitals_retention_days = models.IntegerField(
+        choices=VITALS_RETENTION_CHOICES,
+        default=60,
+        help_text='Number of days to retain health vitals data (30 or 60 days max)'
+    )
+
+    # Individual extended vitals preferences (which vitals to display)
+    # JSON object with vital name as key and boolean as value
+    # Default enables all vitals
+    extended_vitals_preferences = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text='Individual toggle for each extended vital. Keys: walking_steadiness, blood_pressure, blood_glucose, body_temperature, wrist_temperature, vo2_max, afib_detection, six_min_walk, walking_asymmetry, walking_speed, double_support_time, stair_ascent, stair_descent, peripheral_perfusion'
+    )
+
     # Override username field to use email
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = ['username']
@@ -237,6 +263,15 @@ class PatientReport(models.Model):
 
     # Biomarker Trends - lab value changes during period
     biomarker_trends = models.JSONField(default=dict, blank=True)  # {biomarker: {values, trend_direction, analysis}}
+
+    # Activity Analytics - steps, calories, exercise (from Apple Watch)
+    activity_analytics = models.JSONField(default=dict, blank=True)  # {avg_steps, avg_calories, exercise_minutes, activity_level}
+
+    # Mobility Analytics - walking metrics critical for PD monitoring
+    mobility_analytics = models.JSONField(default=dict, blank=True)  # {walking_asymmetry, walking_speed, double_support_time, stair_climbing}
+
+    # Clinical Analytics - motor/non-motor symptoms, speech metrics, cognitive screening
+    clinical_analytics = models.JSONField(default=dict, blank=True)  # {motor_symptoms, non_motor_symptoms, speech_metrics, cognitive_screening}
 
     # AI-enhanced analysis sections
     ai_sleep_analysis = models.TextField(blank=True, null=True)  # Detailed sleep pattern analysis

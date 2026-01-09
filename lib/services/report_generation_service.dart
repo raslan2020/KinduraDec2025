@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../data/network/network_api_services.dart';
 import '../res/app_url/app_url.dart';
+import '../res/colors/app_color.dart';
 
 /// Service for managing background report generation with progress tracking.
 /// This service persists across navigation and notifies when reports complete.
@@ -123,12 +125,43 @@ class ReportGenerationService extends GetxService {
     // Call completion callback
     onReportCompleted?.call(reportId, currentReportType.value);
 
-    // Show success notification
+    // Send push notification
+    _sendReportReadyNotification(reportId, currentReportType.value);
+  }
+
+  /// Show notification when report is ready
+  void _sendReportReadyNotification(int reportId, String reportType) {
+    final type = _formatReportType(reportType);
+
+    // Show a persistent snackbar notification
     Get.snackbar(
-      '${_formatReportType(currentReportType.value)} Report Ready',
-      'Your report has been generated successfully',
+      '$type Report Ready',
+      'Your health report has been generated. Tap to view.',
       snackPosition: SnackPosition.TOP,
-      duration: const Duration(seconds: 5),
+      duration: const Duration(seconds: 8),
+      backgroundColor: AppColor.success,
+      colorText: Colors.white,
+      icon: const Icon(Icons.check_circle, color: Colors.white),
+      margin: const EdgeInsets.all(12),
+      borderRadius: 12,
+      isDismissible: true,
+      mainButton: TextButton(
+        onPressed: () {
+          Get.back(); // Close snackbar
+          // Navigate to reports screen
+          Get.toNamed('/kindura_reports', arguments: {
+            'report_id': reportId,
+            'report_type': reportType,
+          });
+        },
+        child: const Text(
+          'VIEW',
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
     );
   }
 

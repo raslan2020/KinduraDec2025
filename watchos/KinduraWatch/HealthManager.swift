@@ -91,6 +91,21 @@ class HealthManager: NSObject, ObservableObject, WCSessionDelegate, HKWorkoutSes
     @Published var bloodOxygen: Double = 0
     @Published var hrv: Double = 0
     @Published var respiratoryRate: Double = 0
+    @Published var bodyTemperature: Double = 0  // In Celsius
+    @Published var bloodPressureSystolic: Double = 0
+    @Published var bloodPressureDiastolic: Double = 0
+    @Published var bloodGlucose: Double = 0  // In mg/dL
+
+    // Heart Rhythm & Sleep Abnormalities
+    @Published var hasAFibDetected: Bool = false
+    @Published var afibBurdenPercent: Double = 0  // Percentage of time in AFib
+    @Published var lastAFibDate: Date?
+    @Published var hasSleepApneaDetected: Bool = false
+    @Published var apneaHypopneaIndex: Double = 0  // AHI score (events per hour)
+
+    // Abnormality Alerts
+    @Published var hasAbnormalVitals: Bool = false
+    @Published var abnormalityAlerts: [String] = []
 
     // Sleep
     @Published var totalSleepHours: Double = 0

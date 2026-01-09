@@ -1,6 +1,576 @@
 # Kindura Development Changes Log
 
-**Last Updated**: 2026-01-09
+**Last Updated**: 2026-01-10
+
+---
+
+## 2026-01-10 - Fix: Missing Back Button in Medical Reports Screen (Complete)
+
+### Issue
+Medical Reports screen was missing back navigation button in the top left.
+
+### Fix
+Added `showBackButton: true` to the CustomAppBar in `medical_reports_screen.dart`.
+
+### Files Modified
+- `lib/screens/medical_reports/medical_reports_screen.dart`
+
+---
+
+## 2026-01-10 - Fix: Database Migration for Analytics Fields (Complete)
+
+### Issue
+Reports were not loading/generating because the database was missing new columns (`activity_analytics`, `mobility_analytics`, `clinical_analytics`).
+
+### Fix
+Created and applied migration `users/migrations/0022_add_analytics_fields.py`.
+
+### Files Created
+- `KinduraAPIs-0.0.1/users/migrations/0022_add_analytics_fields.py`
+
+---
+
+## 2026-01-10 - Fix: Unintended Logout on API Errors (Complete)
+
+### Issue
+Clicking "Kindura Reports" was logging users out and redirecting to the login screen.
+
+### Root Cause
+The `FetchDataException` class in `lib/data/app_exceptions.dart` had side effects in its constructor that:
+1. Called `userPreferences.removeUser()` - clearing the auth token
+2. Called `Get.deleteAll()` - clearing all controllers
+3. Navigated to splash screen with `Get.offAllNamed(RoutesName.splashScreen)`
+
+This was triggered whenever any API call returned an unhandled status code (like 401, 500, etc.) and the response body wasn't valid JSON.
+
+### Fix
+1. **Removed auto-logout from FetchDataException** (`lib/data/app_exceptions.dart`)
+   - Exceptions should not have side effects
+   - Logout should only happen when user explicitly requests it
+
+2. **Added proper HTTP status code handling** (`lib/data/network/network_api_services.dart`)
+   - 401 Unauthorized: Returns error response with `unauthorized: true` flag
+   - 403 Forbidden: Returns error response
+   - 500/502/503/504: Returns server error response
+   - Default: Returns error response instead of throwing exception
+
+3. **Added UnauthorizedException class** for future use if needed
+
+### Files Modified
+- `lib/data/app_exceptions.dart` - Removed auto-logout, added UnauthorizedException
+- `lib/data/network/network_api_services.dart` - Added proper status code handling
+
+---
+
+## 2026-01-10 - Monthly Report Enhancements (Complete)
+
+### Feature
+Enhanced monthly reports with comprehensive activity and mobility analytics, including previous month comparison tables and improved data persistence.
+
+### Improvements
+
+**1. Activity & Mobility Analytics Persistence** (`KinduraAPIs-0.0.1/users/report_service.py`)
+- Added saving of `activity_analytics` to PatientReport model
+  - avg_steps, total_steps, avg_calories, avg_distance_km, avg_exercise_minutes
+  - activity_level classification (Very Active, Active, Moderate, Low, Sedentary)
+  - step_goal_met_days tracking
+- Added saving of `mobility_analytics` to PatientReport model
+  - walking_asymmetry (avg_percent, status, readings)
+  - walking_speed (avg_m_per_s, status)
+  - double_support_time (avg_percent, status)
+  - stair_climbing (avg_ascent_speed, avg_descent_speed)
+  - six_minute_walk (avg_distance_m)
+- Added saving of `clinical_analytics` with trends data
+  - motor/non-motor symptoms, safety events, speech metrics, cognitive screening
+  - symptom_trends, concerning_patterns, improving_patterns, correlations
+- Added `extended_vitals` to vitals_analytics (BP, glucose, temperature, VO2 max, AFib, walking steadiness)
+
+**2. Previous Month Comparison** (`KinduraAPIs-0.0.1/users/pdf_generator.py`)
+- Monthly reports now fetch previous month's report for comparison
+- `_get_comprehensive_clinical_data()` retrieves prev_avg_daily_steps and prev_mobility_data
+- Enables trend analysis across reporting periods
+
+**3. Mobility Assessment Table** (Monthly Reports Only)
+- New table showing:
+  - Walking Asymmetry: Current vs Previous with status and trend (↑ Worsening / ↓ Improving / → Stable)
+  - Walking Speed: m/s with status and trend
+  - Double Support Time: % with balance status and trend
+  - Stair Ascent Speed: steps/min
+  - Six-Minute Walk Distance: meters with trend
+- Color-coded header (dark blue) for professional appearance
+
+**4. Activity Summary Table** (Monthly Reports Only)
+- New table showing:
+  - Daily Steps (avg): Current vs Previous month with % change
+  - Exercise (min/day): Average daily exercise
+  - Distance (km/day): Average walking distance
+  - Active Calories (kcal/day): Energy expenditure
+  - Step Goal Met (7500): Days achieved / total days with success %
+  - Activity Classification: Overall activity level
+- Color-coded header (dark green) for visual distinction
+
+### Key Field Mappings
+- `mobility_analytics.walking_asymmetry.avg_percent` - Walking asymmetry %
+- `mobility_analytics.walking_speed.avg_m_per_s` - Walking speed m/s
+- `mobility_analytics.double_support_time.avg_percent` - Double support time %
+- `activity_analytics.avg_steps` - Daily step average
+- `activity_analytics.activity_level` - Activity classification
+
+### Files Modified
+- `KinduraAPIs-0.0.1/users/report_service.py` - Added analytics persistence
+- `KinduraAPIs-0.0.1/users/pdf_generator.py` - Added tables and comparison logic
+
+---
+
+## 2026-01-10 - Comprehensive Clinical PDF Report Format (Complete)
+
+### Feature
+Completely rewrote the PDF report generator to match the professional Parkinson's Disease clinical report format with 12 structured sections designed for neurologist review.
+
+### Report Structure (12 Sections)
+1. **Chief Complaint / Visit Focus** - Auto-generated from symptom data, describes patient's primary concerns
+2. **Interim History Since Last Visit** - Falls, hospitalizations, hallucinations, symptom progression
+3. **Detailed Motor Symptom Assessment** - Table with Baseline, Current, Trend, Time-of-Day Pattern
+   - Bradykinesia, Rest Tremor, Rigidity, Gait/Balance, Freezing
+4. **Non-Motor Symptom Assessment** - Narrative text covering sleep, constipation, mood, hallucinations, autonomic symptoms
+5. **Cognitive & Psychological Status** - MoCA-lite scores, PHQ-9 depression screening
+6. **Functional Status & Quality of Life** - ADLs, walking endurance, speech, swallowing
+7. **Lifestyle, Sleep, and Activity Review** - Sleep duration, daily steps, daytime napping, exercise
+8. **Medication Review & Adherence** - Current medications, adherence %, late doses, wearing-off detection, side effects
+9. **Objective Device-Derived Data** - Step trends, gait variability, falls, heart rate, HRV
+10. **Laboratory & Diagnostic Review** - Abnormal biomarkers, lab values
+11. **AI-Generated Clinical Considerations** - Observation, Confidence Level, Clinical Context
+12. **Physician Assessment & Plan** - Blank lines for doctor to write notes
+
+### Key Improvements
+- **Baseline vs Current Comparison**: Motor symptoms show previous period as baseline for trend analysis
+- **Time-of-Day Patterns**: Identifies "Worse afternoons", "Pre-dose", "End of day" patterns for wearing-off detection
+- **Trend Analysis**: Automatic classification (Gradual worsening, Mild increase, Stable, Improving)
+- **Narrative Style**: Professional prose instead of just data tables
+- **Wearing-Off Detection**: Correlates rigidity patterns with dosing timing
+- **Freezing of Gait**: New tracking with Absent/Occasional/Frequent status
+- **Confidence Level**: High/Medium/Low based on data completeness
+- **Proper Clinical Disclaimer**: "Intended to support, not replace, clinical judgment. Kindura does not diagnose or prescribe."
+
+### Data Sources Utilized
+- Motor symptom entries (daily self-reported, 1-5 scale)
+- Non-motor symptom entries (weekly self-reported)
+- Safety events (falls, hallucinations, rapid worsening)
+- Cognitive screening (MoCA-lite, PHQ-9)
+- Medication adherence (doses taken, missed, late)
+- Device vitals (heart rate, HRV from Apple Watch)
+- Activity data (steps, exercise minutes)
+- Sleep analytics (hours, stages)
+- Lab biomarkers (abnormalities)
+
+### Files Modified
+- `KinduraAPIs-0.0.1/users/pdf_generator.py` - Complete rewrite with 12-section format
+
+---
+
+## 2026-01-10 - Report Generation UX Improvements (Complete)
+
+### Feature
+Improved the report generation UX so users aren't blocked while waiting for reports. The progress indicator is now a small inline banner at the top of the reports screen, and users receive a push notification when the report is ready.
+
+### Changes
+
+**1. Inline Progress Banner** (`lib/common_widgets/report_progress_banner.dart` - NEW)
+- Small, non-blocking banner at top of reports screen
+- Shows spinning indicator, report type, and progress percentage
+- Automatically hides when not generating
+- Doesn't block user from navigating or interacting
+
+**2. Push Notification on Completion** (`lib/services/report_generation_service.dart`)
+- Added `_sendReportReadyNotification()` method
+- Sends local notification when report is complete
+- User can tap notification to view the report
+- Works even if user navigates away from reports screen
+
+**3. Removed Global Floating Overlay**
+- Removed `ReportProgressOverlay` from bottom_navigation_screen.dart
+- Old overlay was floating at bottom of all screens - now inline only in reports
+
+**4. Fixed Stuck Report**
+- Reset monthly report that was stuck at 90% for 7 days
+- Added 60-second timeout to OpenAI API call to prevent future hangs
+
+### User Experience
+1. User taps "Generate Report" button
+2. Small inline banner appears at top showing progress
+3. User can freely navigate to other tabs (Home, Labs, Meds, Profile)
+4. When report completes, user receives push notification
+5. Tapping notification opens the report
+
+### Files Created
+- `lib/common_widgets/report_progress_banner.dart`
+
+### Files Modified
+- `lib/services/report_generation_service.dart` - Added notification support
+- `lib/screens/kindura_reports/kindura_reports_screen.dart` - Added inline banner
+- `lib/screens/bottom_navigation/bottom_navigation_screen.dart` - Removed global overlay
+- `KinduraAPIs-0.0.1/users/report_service.py` - Added timeout to OpenAI call
+
+---
+
+## 2026-01-09 - Comprehensive AI Report Generation (Complete)
+
+### Feature
+Enhanced the report generation service to analyze ALL available data sources for comprehensive AI-generated clinical reports. The AI now considers labs, medical reports, HealthKit vitals, agent conversations, clinical symptoms, trends, and patterns to provide actionable insights for neurologists.
+
+### Data Sources Now Analyzed
+1. **Clinical Data** (per Reports.md) - Motor symptoms, non-motor symptoms, safety events
+2. **HealthKit Vitals** - Heart rate, SpO2, HRV, sleep stages, activity
+3. **Medication Adherence** - Doses taken/missed, timing, side effects
+4. **Lab Results & Biomarkers** - Abnormalities, trends, critical values
+5. **Conversation Insights** - Topics discussed, concerns raised, mood observations
+6. **Medical Reports** - Uploaded documents and their AI summaries
+7. **Trend Analysis** - Patterns across all data sources
+
+### New Collection Methods Added to ReportService
+- `_collect_clinical_data()` - Motor/non-motor symptoms, safety events, laterality
+- `_collect_conversation_data()` - Agent conversation insights, topics, concerns
+- `_collect_medical_reports()` - Uploaded medical documents and findings
+- `_analyze_trends()` - Cross-source pattern analysis (worsening/improving trends)
+
+### Enhanced AI Analysis
+The AI prompt now includes:
+- Parkinson's-specific clinical context (MDS-UPDRS awareness)
+- Motor symptom progression tracking
+- Medication wearing-off pattern detection
+- Sleep-symptom correlations
+- Safety event pattern analysis
+- Data completeness validation per Reports.md
+
+### New AI Response Fields
+- `clinical_assessment` - Motor/non-motor symptom analysis
+- `trend_summary` - Improving and worsening patterns
+- `red_flags` - Safety events requiring immediate attention
+- `data_gaps` - Missing data per Reports.md requirements
+
+### Clinical Score Added
+New health score weighting for Parkinson's Disease:
+- Clinical Score: 35% (motor symptoms, safety events, data completeness)
+- Adherence Score: 25%
+- Sleep Score: 20%
+- Vitals Score: 20%
+
+### Files Modified
+- `KinduraAPIs-0.0.1/users/report_service.py` - Added 4 new collection methods, enhanced AI prompt
+
+---
+
+## 2026-01-09 - Clinical Data Collection per Reports.md (Complete)
+
+### Feature
+Implemented clinical data collection system following the Reports.md specification for Parkinson's Disease monitoring. The AI agent now proactively collects motor symptoms daily, non-motor symptoms weekly, and records safety events. Flutter UI updated to display clinical data in reports.
+
+### Reports.md Specification Coverage
+
+**Core Motor Symptoms (Daily Collection)**
+- Bradykinesia (1-5 scale) - mandatory core feature
+- Tremor (1-5 scale)
+- Rigidity (1-5 scale)
+- Gait Difficulty (1-5 scale)
+- Laterality (L/R/Both) - diagnostic relevance
+
+**Non-Motor Symptoms (Weekly Collection)**
+- Sleep disturbance / REM behavior
+- Constipation
+- Dizziness / autonomic symptoms
+- Mood / apathy
+- Fatigue
+- Smell loss
+
+**Safety Events (Event-Driven)**
+- Falls
+- Hallucinations
+- Rapid symptom worsening
+- Severe autonomic symptoms
+- Poor levodopa response
+
+### Backend Implementation
+
+**1. Django Models** (`health_profile/models.py`)
+- `PatientClinicalProfile` - Patient context data (age, onset, family history)
+- `MotorSymptomEntry` - Daily motor symptom recordings
+- `NonMotorSymptomEntry` - Weekly non-motor symptom recordings
+- `MedicationDoseEntry` - Per-dose medication tracking
+- `SafetyEvent` - Safety event logging with severity
+- `SpeechMetrics` - Weekly voice/speech metrics
+- `CognitiveScreening` - Monthly MoCA-lite and PHQ-9 scores
+- `ClinicalReport` - Generated clinical reports
+- `AgentDataCollection` - Tracks data gaps for agent prompts
+
+**2. Serializers** (`health_profile/serializers.py`)
+- Added serializers for all clinical data models
+- `AgentSymptomCollectionSerializer` - Simplified one-symptom-at-a-time collection
+- `DataGapsSerializer` - Returns prioritized questions with prompts
+
+**3. API Views** (`health_profile/views.py`)
+- `MotorSymptomView` - Motor symptom CRUD
+- `NonMotorSymptomView` - Non-motor symptom CRUD
+- `SafetyEventView` - Safety event logging
+- `CognitiveScreeningView` - PHQ-9 with Q9 escalation check
+- `ClinicalReportView` - Report retrieval
+- `AgentDataGapsView` - Returns what the agent needs to ask
+- `AgentSymptomCollectView` - Single symptom submission endpoint
+
+**4. Clinical Data in Patient Reports** (`users/views.py`)
+- Added `_get_clinical_data_for_period()` helper method
+- Patient reports now include `clinical_data` with:
+  - Motor symptoms list and averages
+  - Non-motor symptoms list and averages
+  - Safety events
+  - Data completeness percentage (per Reports.md Section 6)
+
+### LiveKit Agent Updates
+
+**5. Clinical Data API Service** (`kinduralivekit-0.0.1/utils/clinical_data_api.py` - NEW)
+- `ClinicalDataAPI` class for agent to call backend
+- Methods: `get_data_gaps()`, `collect_symptom()`, `record_safety_event()`
+- Formatting helpers for agent context
+
+**6. Agent Function Tools** (`kinduralivekit-0.0.1/agent.py`)
+- `get_clinical_data_gaps` - Get list of questions to ask
+- `record_bradykinesia`, `record_tremor`, `record_rigidity`, `record_gait_difficulty` - Motor symptoms
+- `record_laterality` - Which side is more affected
+- `record_safety_event` - Log falls, hallucinations, etc.
+- `get_motor_symptom_history` - Get recent symptom trends
+- `get_clinical_reports` - Access clinical reports
+
+**7. Agent Prompt Updates** (`kinduralivekit-0.0.1/utils/global_variables.py`)
+- Added "CLINICAL DATA COLLECTION" section to agent prompt
+- Daily prompts: "How stiff did you feel today, 1-5?"
+- Weekly prompts: Non-motor symptoms (sleep, constipation, etc.)
+- Collection rules: One symptom per question, ≤12 words, 1-5 scale
+- Safety event handling with escalation
+
+**8. Report Generation Command** (`health_profile/management/commands/generate_clinical_reports.py`)
+- Management command to generate daily/weekly/monthly clinical reports
+- Calculates data completeness per Reports.md thresholds
+- Daily ≥60%, Weekly ≥4 days, Monthly ≥70%
+- Identifies red flags and generates AI insights
+
+### Flutter UI Updates
+
+**9. New Clinical Tab in Reports** (`lib/screens/kindura_reports/kindura_reports_screen.dart`)
+- Added "Clinical" tab to report detail view (now 6 tabs)
+- `_buildClinicalTab()` - Main clinical data display
+- `_buildCompletenessCard()` - Shows data completeness %
+- `_buildSafetyEventsCard()` - Displays falls, hallucinations, etc.
+- `_buildMotorSymptomsCard()` - Motor symptom bars with trend chart
+- `_buildNonMotorSymptomsCard()` - Non-motor symptom bars
+- `_buildSymptomBar()` - Color-coded progress bars (1-5 scale)
+- `_buildMotorTrendChart()` - Line chart showing symptom trends
+
+**10. Clinical API URLs** (`lib/res/app_url/app_url.dart`)
+- `clinicalProfileUrl` - Patient clinical profile
+- `motorSymptomsUrl` - Motor symptoms endpoint
+- `nonMotorSymptomsUrl` - Non-motor symptoms endpoint
+- `safetyEventsUrl` - Safety events endpoint
+- `clinicalReportsUrl` - Clinical reports
+- `agentDataGapsUrl` - Agent data gaps
+
+### Data Collection Rules (per Reports.md Section 4)
+- One symptom per question
+- ≤ 12 words per prompt
+- Numeric scales (1-5) preferred
+- Plain language only
+- No diagnostic phrasing
+
+Example agent prompts:
+- "How stiff did you feel today, from 1 to 5?"
+- "Any trouble with balance or walking today?"
+- "Did you experience any tremor today, 1-5?"
+
+### Files Created
+- `KinduraAPIs-0.0.1/health_profile/migrations/0008_add_clinical_data_models.py`
+- `KinduraAPIs-0.0.1/health_profile/management/commands/generate_clinical_reports.py`
+- `kinduralivekit-0.0.1/utils/clinical_data_api.py`
+
+### Files Modified
+- `KinduraAPIs-0.0.1/health_profile/models.py` - Added 9 clinical data models
+- `KinduraAPIs-0.0.1/health_profile/serializers.py` - Added clinical serializers
+- `KinduraAPIs-0.0.1/health_profile/views.py` - Added clinical API views
+- `KinduraAPIs-0.0.1/medical_app/urls.py` - Added clinical API URLs
+- `KinduraAPIs-0.0.1/users/views.py` - Added clinical data to patient reports
+- `kinduralivekit-0.0.1/agent.py` - Added clinical data collection tools
+- `kinduralivekit-0.0.1/utils/global_variables.py` - Updated agent prompt
+- `lib/screens/kindura_reports/kindura_reports_screen.dart` - Added Clinical tab
+- `lib/res/app_url/app_url.dart` - Added clinical endpoints
+
+### Migrations
+- `health_profile/migrations/0008_add_clinical_data_models.py`
+
+---
+
+## 2026-01-09 - Individual Extended Vitals Toggle Settings (Complete)
+
+### Feature
+Added granular control for users to enable/disable each extended vital individually from Settings. Users can now choose exactly which health metrics they want to see displayed on their home screen.
+
+### Settings UI
+When "Extended Vitals Collection" is enabled, a new "Individual Vitals" section appears with:
+- **All On / All Off** quick toggle buttons
+- **4 categorized groups** with color-coded headers:
+  - **Cardiovascular** (Red): Blood Pressure, AFib Detection
+  - **Metabolic** (Orange): Blood Glucose, Body Temperature, Wrist Temperature
+  - **Fitness** (Blue): VO2 Max, Perfusion Index
+  - **Mobility** (Teal): Walking Steadiness, Walking Speed, Walking Asymmetry, 6-Min Walk, Balance, Stair Ascent/Descent
+
+### Implementation
+
+**1. Django Backend**
+- Added `extended_vitals_preferences` JSONField to User model
+- Updated UserProfileSerializer to include the new field
+- Created migration `0021_add_extended_vitals_preferences.py`
+
+**2. Flutter Model (`user_profile_model.dart`)**
+- Added `extendedVitalsPreferences` field (Map<String, bool>)
+- Created `ExtendedVitalsPreferences` class with:
+  - `defaults` - default enabled state for all vitals
+  - `displayNames` - human-readable names for each vital
+  - `categories` - grouping of vitals by category
+
+**3. Profile Controller (`profile_controller.dart`)**
+- Added `extendedVitalsPreferences` observable
+- Added helper methods: `isVitalEnabled()`, `toggleVital()`, `enableAllVitals()`, `disableAllVitals()`
+- Updated `saveProfile()` to include preferences in API call
+
+**4. Profile Screen (`profile_screen.dart`)**
+- Added `_buildExtendedVitalsToggles()` method
+- Added `_buildVitalCategory()` method for categorized display
+- Category headers with icons and colors
+- SwitchListTile for each individual vital
+
+**5. Home Screen (`home_screen.dart`)**
+- Updated `_buildExtendedVitalsSection()` to check user preferences
+- Only displays vitals that are enabled in user preferences
+- Hidden vitals don't appear even if data exists
+
+### Files Modified
+- `KinduraAPIs-0.0.1/users/models.py`
+- `KinduraAPIs-0.0.1/users/serializers.py`
+- `lib/models/user_profile/user_profile_model.dart`
+- `lib/screens/profile/profile_controller.dart`
+- `lib/screens/profile/profile_screen.dart`
+- `lib/screens/home/home_screen.dart`
+
+### Migrations
+- `users/migrations/0021_add_extended_vitals_preferences.py`
+
+---
+
+## 2026-01-09 - Extended Vitals Home Screen Display (Complete)
+
+### Feature
+Added comprehensive extended vitals display to the home screen health widget. All 17 extended health metrics from HealthKit are now visible when data is available.
+
+### Extended Vitals Now Displayed
+
+**Primary Vitals Section:**
+- Blood Glucose (mg/dL) - with color-coded status
+- Blood Pressure (systolic/diastolic) - with BP classification colors
+- Body Temperature (°C) - with fever detection colors
+- Wrist Temperature Delta (°C) - Apple Watch baseline deviation
+- VO2 Max - cardiovascular fitness indicator
+- Peripheral Perfusion Index (%) - blood flow quality
+
+**Mobility Section:**
+- Six-Minute Walk Distance (m) - cardiopulmonary fitness test
+- Walking Speed (m/s) - gait speed indicator
+- Walking Asymmetry (%) - leg movement balance
+- Double Support Time (%) - balance indicator
+- Stair Ascent Speed (m/s)
+- Stair Descent Speed (m/s)
+
+**Special Alerts:**
+- AFib Detection banner with burden percentage
+- Walking Steadiness classification (OK/Low/Very Low)
+
+### Implementation
+
+**1. Home Controller (`home_controller.dart`)**
+- Added `getExtendedVitals()` call in `loadWatchVitals()`
+- Merges all 17 extended vitals into the watchVitals observable
+- Logs extended vitals in summary output
+
+**2. Home Screen (`home_screen.dart`)**
+- Updated `_buildExtendedVitalsSection()` to show ALL extended vitals
+- Added new "Mobility" sub-section for walking/stair metrics
+- Added color helper functions for wrist temp delta and walking asymmetry
+- Removed requirement for `extended_vitals_enabled` flag - now shows if data exists
+
+### Color-Coded Health Indicators
+- Walking Asymmetry: Green (<8%), Orange (8-15%), Red (>15%)
+- Wrist Temp Delta: Green (±0.5°C), Orange (±1°C), Red (>1°C deviation)
+- All existing color functions retained (BP, glucose, temp, VO2 max, etc.)
+
+### Files Modified
+- `lib/screens/home/home_controller.dart` - Extended vitals fetching
+- `lib/screens/home/home_screen.dart` - Extended vitals UI display
+
+---
+
+## 2026-01-09 - Extended Vitals & Data Retention Settings (Complete)
+
+### Feature
+Added support for extended HealthKit vitals collection and user-configurable data retention periods. Users can now enable collection of 17+ additional health metrics and choose how long their vitals data is retained (30 or 60 days).
+
+### Extended Vitals Added (17 new metrics)
+- **Cardiovascular**: Blood pressure (systolic/diastolic), AFib detection, AFib burden %
+- **Metabolic**: Blood glucose, body temperature, wrist temperature delta
+- **Fitness**: VO2 Max, walking steadiness (% and classification), walking speed, walking asymmetry
+- **Mobility**: Stair ascent/descent speed, six-minute walk distance, double support time (balance)
+- **Other**: Peripheral perfusion index, sleep apnea detection (AHI score)
+
+### Implementation
+
+**1. Django Backend (KinduraAPIs-0.0.1)**
+- `health_profile/models.py` - Added 17 extended vitals fields to WatchVitals model
+- `health_profile/serializers.py` - Updated serializer with all new fields
+- `health_profile/migrations/0007_add_extended_vitals_and_retention.py` - Migration for health_profile
+- `users/models.py` - Added `extended_vitals_enabled` (bool) and `vitals_retention_days` (int) to User
+- `users/serializers.py` - Updated UserSerializer with new fields
+- `users/migrations/0020_add_extended_vitals_and_retention.py` - Migration for users
+
+**2. Flutter Frontend**
+- `lib/models/user_profile/user_profile_model.dart` - Added `extendedVitalsEnabled` and `vitalsRetentionDays` fields
+- `lib/screens/profile/profile_controller.dart` - Added observable variables and included in saveProfile() API call
+- `lib/screens/profile/profile_screen.dart` - UI toggle for extended vitals and retention period picker
+
+**3. iOS/watchOS Native**
+- `watchos/KinduraWatch/HealthManager.swift` - Extended vitals properties already present (BP, glucose, temp, AFib)
+- `ios/Runner/AppDelegate.swift` - `fetchExtendedVitals()` method for HealthKit queries
+
+### User Settings
+- **Extended Vitals Toggle**: Enable/disable collection of additional health metrics
+- **Data Retention**: Choose 30 or 60 days for vitals data retention
+
+### Files Modified
+- `KinduraAPIs-0.0.1/health_profile/models.py`
+- `KinduraAPIs-0.0.1/health_profile/serializers.py`
+- `KinduraAPIs-0.0.1/users/models.py`
+- `KinduraAPIs-0.0.1/users/serializers.py`
+- `lib/models/user_profile/user_profile_model.dart`
+- `lib/screens/profile/profile_controller.dart`
+- `lib/screens/profile/profile_screen.dart`
+
+---
+
+## 2026-01-09 - Settings Dialog UI Overflow Fix
+
+### Problem
+The Settings dialog had a UI overflow (57 pixels) in the Fall Detection section. The title "How to Enable Apple Fall Detection" was too long for the container width.
+
+### Solution
+- Shortened title from "How to Enable Apple Fall Detection" to "Enable Apple Fall Detection"
+- Changed `Expanded` to `Flexible` for better text handling
+- Reduced icon size from 22.sp to 20.sp to give more space
+
+### Files Modified
+- `lib/screens/profile/profile_screen.dart` - Fixed header row in Fall Detection section
 
 ---
 

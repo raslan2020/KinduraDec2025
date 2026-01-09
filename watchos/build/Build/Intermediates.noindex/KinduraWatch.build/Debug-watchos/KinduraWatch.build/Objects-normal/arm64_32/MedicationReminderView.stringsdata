@@ -1,0 +1,56 @@
+{
+  "source": "/Users/ralabaji/Kinduraios/watchos/KinduraWatch/MedicationReminderView.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Reminder",
+        "location": {
+          "startingColumn": 48,
+          "startingLine": 16
+        }
+      },
+      {
+        "comment": "",
+        "key": "Medication Time",
+        "location": {
+          "startingColumn": 61,
+          "startingLine": 16
+        }
+      },
+      {
+        "comment": "",
+        "key": "Please take now",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 73
+        }
+      },
+      {
+        "comment": "",
+        "key": "Take Now",
+        "location": {
+          "startingColumn": 34,
+          "startingLine": 86
+        }
+      },
+      {
+        "comment": "",
+        "key": "15m",
+        "location": {
+          "startingColumn": 38,
+          "startingLine": 102
+        }
+      },
+      {
+        "comment": "",
+        "key": "Skip",
+        "location": {
+          "startingColumn": 38,
+          "startingLine": 118
+        }
+      }
+    ]
+  },
+  "version": 1
+}

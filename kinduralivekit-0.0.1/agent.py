@@ -23,6 +23,7 @@ from utils.watch_vitals_api import get_watch_vitals_service
 from utils.contacts_api import ContactsAPI
 from utils.observations_api import ObservationsAPI
 from utils.biomarkers_api import BiomarkersAPI
+from utils.clinical_data_api import get_clinical_data_service
 
 def print_response(response, context):
     print(f"[{context}] Status: {response.status_code}, Response: {response.text}")
@@ -39,6 +40,7 @@ class Assistant(Agent):
 _medication_service = None
 _observations_service = None
 _biomarkers_service = None
+_clinical_data_service = None  # Clinical data collection (Reports.md)
 _base_url = None
 _auth_token = None
 _allow_agent_medication_updates = False  # User permission to update medications
@@ -754,6 +756,310 @@ async def get_kindura_contacts() -> str:
         return "Unable to retrieve contacts at this time."
 
 
+# ============================================================
+# CLINICAL DATA COLLECTION TOOLS (Following Reports.md)
+# For Parkinson's Disease Monitoring
+# ============================================================
+
+@function_tool(description="Get data gaps - what clinical data is missing and needs to be collected. Returns prioritized questions to ask the patient. Call this at the start of conversations to know what data to collect.")
+async def get_clinical_data_gaps() -> str:
+    """Get list of missing data points to collect from patient"""
+    global _clinical_data_service
+    print(f"📊 Checking clinical data gaps...")
+
+    if not _clinical_data_service:
+        return "Clinical data service not available."
+
+    try:
+        gaps = await _clinical_data_service.get_data_gaps()
+        if gaps:
+            formatted = _clinical_data_service.format_data_gaps_for_agent(gaps)
+            print(f"📋 Found {len(gaps)} data gaps to collect")
+            return formatted
+        else:
+            return "All required clinical data has been collected for today."
+    except Exception as e:
+        print(f"❌ Error getting data gaps: {e}")
+        return "Unable to check data gaps at this time."
+
+
+@function_tool(description="Record movement slowness (bradykinesia) score. MUST call when patient reports how slow their movements were. This is a REQUIRED daily symptom. Scale: 1=minimal, 5=severe.")
+async def record_bradykinesia(score: int, notes: str = "") -> str:
+    """Record bradykinesia (movement slowness) score"""
+    global _clinical_data_service
+    print(f"🐢 Recording bradykinesia score: {score}")
+
+    if not _clinical_data_service:
+        return "Unable to record - clinical data service not available."
+
+    if score < 1 or score > 5:
+        return "Please rate your movement slowness from 1 to 5, where 1 is minimal and 5 is severe."
+
+    result = await _clinical_data_service.collect_symptom(
+        symptom_type='bradykinesia',
+        value=score,
+        notes=notes
+    )
+
+    if result.get('success'):
+        print(f"✅ Bradykinesia score {score} recorded")
+        responses = {
+            1: "I've noted that your movements were mostly normal today. That's good!",
+            2: "I've recorded a mild slowness in your movements.",
+            3: "I've noted moderate movement slowness. Let me know if it affects your daily activities.",
+            4: "I've recorded significant movement slowness. Please mention this to your doctor.",
+            5: "I've noted severe movement slowness. This is important information for your doctor."
+        }
+        return responses.get(score, "Movement slowness recorded.")
+    else:
+        return "I had trouble recording that. Please try again."
+
+
+@function_tool(description="Record tremor score. MUST call when patient reports about their tremor/shaking. Scale: 1=minimal, 5=severe.")
+async def record_tremor(score: int, tremor_type: str = "rest", notes: str = "") -> str:
+    """Record tremor (shaking) score"""
+    global _clinical_data_service
+    print(f"👋 Recording tremor score: {score} ({tremor_type})")
+
+    if not _clinical_data_service:
+        return "Unable to record - clinical data service not available."
+
+    if score < 1 or score > 5:
+        return "Please rate your tremor from 1 to 5, where 1 is minimal and 5 is severe."
+
+    full_notes = f"Type: {tremor_type}. {notes}".strip()
+    result = await _clinical_data_service.collect_symptom(
+        symptom_type='tremor',
+        value=score,
+        notes=full_notes
+    )
+
+    if result.get('success'):
+        print(f"✅ Tremor score {score} recorded")
+        if score <= 2:
+            return f"I've noted minimal to mild tremor today."
+        elif score <= 3:
+            return f"I've recorded moderate tremor. Is it affecting your daily tasks?"
+        else:
+            return f"I've noted significant tremor. Please discuss this with your doctor."
+    else:
+        return "I had trouble recording that. Please try again."
+
+
+@function_tool(description="Record muscle stiffness (rigidity) score. MUST call when patient reports about stiffness. Scale: 1=minimal, 5=severe.")
+async def record_rigidity(score: int, notes: str = "") -> str:
+    """Record rigidity (muscle stiffness) score"""
+    global _clinical_data_service
+    print(f"💪 Recording rigidity score: {score}")
+
+    if not _clinical_data_service:
+        return "Unable to record - clinical data service not available."
+
+    if score < 1 or score > 5:
+        return "Please rate your stiffness from 1 to 5, where 1 is minimal and 5 is severe."
+
+    result = await _clinical_data_service.collect_symptom(
+        symptom_type='rigidity',
+        value=score,
+        notes=notes
+    )
+
+    if result.get('success'):
+        print(f"✅ Rigidity score {score} recorded")
+        if score <= 2:
+            return "I've noted minimal to mild stiffness today."
+        elif score <= 3:
+            return "I've recorded moderate stiffness. Gentle stretching may help."
+        else:
+            return "I've noted significant stiffness. Please mention this to your doctor."
+    else:
+        return "I had trouble recording that. Please try again."
+
+
+@function_tool(description="Record walking and balance difficulty score. MUST call when patient reports about walking, balance, or gait problems. Scale: 1=minimal, 5=severe.")
+async def record_gait_difficulty(score: int, freezing_episodes: int = 0, notes: str = "") -> str:
+    """Record gait (walking/balance) difficulty score"""
+    global _clinical_data_service
+    print(f"🚶 Recording gait difficulty score: {score}, freezing episodes: {freezing_episodes}")
+
+    if not _clinical_data_service:
+        return "Unable to record - clinical data service not available."
+
+    if score < 1 or score > 5:
+        return "Please rate your walking difficulty from 1 to 5, where 1 is minimal and 5 is severe."
+
+    full_notes = notes
+    if freezing_episodes > 0:
+        full_notes = f"Freezing episodes: {freezing_episodes}. {notes}".strip()
+
+    result = await _clinical_data_service.collect_symptom(
+        symptom_type='gait',
+        value=score,
+        notes=full_notes
+    )
+
+    if result.get('success'):
+        print(f"✅ Gait difficulty score {score} recorded")
+        response = ""
+        if score <= 2:
+            response = "I've noted your walking was mostly okay today."
+        elif score <= 3:
+            response = "I've recorded moderate walking difficulty."
+        else:
+            response = "I've noted significant walking difficulty. Please be careful and consider using support."
+
+        if freezing_episodes > 0:
+            response += f" I've also noted {freezing_episodes} freezing episode{'s' if freezing_episodes > 1 else ''}."
+
+        return response
+    else:
+        return "I had trouble recording that. Please try again."
+
+
+@function_tool(description="Record which side of the body is more affected. MUST call when patient indicates left, right, or both sides are affected. Side: 'L' for left, 'R' for right, 'B' for both.")
+async def record_laterality(side: str, notes: str = "") -> str:
+    """Record which side is more affected"""
+    global _clinical_data_service
+    print(f"↔️ Recording laterality: {side}")
+
+    if not _clinical_data_service:
+        return "Unable to record - clinical data service not available."
+
+    # Normalize the side value
+    side_upper = side.upper().strip()
+    if side_upper in ['LEFT', 'L']:
+        side_value = 'L'
+        side_name = 'left'
+    elif side_upper in ['RIGHT', 'R']:
+        side_value = 'R'
+        side_name = 'right'
+    elif side_upper in ['BOTH', 'B', 'BILATERAL']:
+        side_value = 'B'
+        side_name = 'both sides equally'
+    else:
+        return "Please specify left, right, or both sides."
+
+    result = await _clinical_data_service.collect_symptom(
+        symptom_type='laterality',
+        value=1,  # Not used for laterality
+        laterality_value=side_value,
+        notes=notes
+    )
+
+    if result.get('success'):
+        print(f"✅ Laterality ({side_value}) recorded")
+        return f"I've noted that your {side_name} is more affected today."
+    else:
+        return "I had trouble recording that. Please try again."
+
+
+@function_tool(description="Record a safety event like a fall or hallucination. MUST call when patient reports falls, seeing/hearing things that aren't there, or rapid symptom worsening. Event types: fall, hallucination, rapid_worsening.")
+async def record_safety_event(event_type: str, description: str, severity: str = "medium", injury: bool = False) -> str:
+    """Record a safety event (fall, hallucination, rapid worsening)"""
+    global _clinical_data_service
+    print(f"🚨 Recording safety event: {event_type} (severity: {severity})")
+
+    if not _clinical_data_service:
+        return "Unable to record - clinical data service not available."
+
+    # Map common terms to event types
+    type_map = {
+        'fall': 'fall',
+        'fell': 'fall',
+        'hallucination': 'hallucination',
+        'seeing things': 'hallucination',
+        'hearing things': 'hallucination',
+        'rapid_worsening': 'rapid_worsening',
+        'worse': 'rapid_worsening',
+        'getting worse': 'rapid_worsening'
+    }
+    event_type_normalized = type_map.get(event_type.lower(), event_type)
+
+    result = await _clinical_data_service.record_safety_event(
+        event_type=event_type_normalized,
+        description=description,
+        severity=severity,
+        injury_sustained=injury
+    )
+
+    if result.get('success'):
+        print(f"✅ Safety event recorded")
+
+        if event_type_normalized == 'fall':
+            if injury:
+                return "I've recorded this fall with injury. This is concerning. Please have someone check on you and consider contacting your doctor. Are you okay right now?"
+            else:
+                return "I've recorded this fall. I'm glad you're okay. Falls can be serious, so please be careful. Your doctor will be notified in your report."
+
+        elif event_type_normalized == 'hallucination':
+            return "I've recorded this. Seeing or hearing things that aren't there can happen with some medications. Please mention this to your doctor - it's important information."
+
+        elif event_type_normalized == 'rapid_worsening':
+            return "I've recorded that your symptoms are worsening rapidly. This is important. Please contact your doctor or caregiver as soon as possible."
+
+        else:
+            return "I've recorded this safety concern. It will be included in your report for your doctor."
+    else:
+        return "I had trouble recording that. Please try again or contact your caregiver."
+
+
+@function_tool(description="Get recent motor symptom history showing trends over the past week. Call this to understand the patient's symptom patterns.")
+async def get_motor_symptom_history() -> str:
+    """Get recent motor symptom entries for trend analysis"""
+    global _clinical_data_service
+    print(f"📈 Fetching motor symptom history...")
+
+    if not _clinical_data_service:
+        return "Clinical data service not available."
+
+    try:
+        symptoms = await _clinical_data_service.get_motor_symptoms(days=7)
+        if symptoms:
+            formatted = _clinical_data_service.format_motor_symptoms_for_agent(symptoms)
+            print(f"📊 Retrieved {len(symptoms)} days of motor symptom data")
+            return formatted
+        else:
+            return "No motor symptom data recorded in the past week."
+    except Exception as e:
+        print(f"❌ Error getting motor symptom history: {e}")
+        return "Unable to retrieve symptom history at this time."
+
+
+@function_tool(description="Get clinical reports (daily, weekly, or monthly summaries). Report types: 'daily', 'weekly', 'monthly'. Call this when patient asks about their health reports or summaries.")
+async def get_clinical_reports(report_type: str = "") -> str:
+    """Get clinical reports for the patient"""
+    global _clinical_data_service
+    print(f"📄 Fetching clinical reports... (type: {report_type if report_type else 'all'})")
+
+    if not _clinical_data_service:
+        return "Clinical data service not available."
+
+    try:
+        reports = await _clinical_data_service.get_clinical_reports(
+            report_type=report_type if report_type else None,
+            limit=3
+        )
+
+        if reports:
+            result = f"Recent {report_type + ' ' if report_type else ''}Reports:\n"
+            for report in reports:
+                period_start = report.get('period_start', 'N/A')
+                period_end = report.get('period_end', 'N/A')
+                status = report.get('status', 'unknown')
+                completeness = report.get('data_completeness_percent', 0)
+                rtype = report.get('report_type', 'unknown')
+
+                result += f"- {rtype.capitalize()} ({period_start} to {period_end}): "
+                result += f"{completeness:.0f}% complete, Status: {status}\n"
+
+            return result
+        else:
+            return "No clinical reports available yet. Reports are generated as you provide daily symptom data."
+    except Exception as e:
+        print(f"❌ Error getting clinical reports: {e}")
+        return "Unable to retrieve reports at this time."
+
+
 async def entrypoint(ctx: agents.JobContext):
     
     await ctx.connect()
@@ -803,7 +1109,7 @@ async def entrypoint(ctx: agents.JobContext):
     medical_documents = participant_metadata.get('medical_reports', [])
 
     # Set global variables for function tools
-    global _medication_service, _observations_service, _biomarkers_service, _contacts_service, _base_url, _auth_token, _allow_agent_medication_updates, _medications_cache
+    global _medication_service, _observations_service, _biomarkers_service, _contacts_service, _clinical_data_service, _base_url, _auth_token, _allow_agent_medication_updates, _medications_cache
     _base_url = BASE_URL
     _auth_token = auth_token
     _allow_agent_medication_updates = allow_medication_updates
@@ -815,6 +1121,10 @@ async def entrypoint(ctx: agents.JobContext):
     # Initialize biomarkers service for lab results access
     _biomarkers_service = BiomarkersAPI(auth_token, BASE_URL)
     print(f"🔬 Biomarkers service initialized with BASE_URL: {BASE_URL}")
+
+    # Initialize clinical data service for PD symptom collection (Reports.md)
+    _clinical_data_service = get_clinical_data_service(BASE_URL, auth_token)
+    print(f"🏥 Clinical data service initialized (Reports.md)")
 
     # Fetch medications directly from database
     print(f"🔄 Fetching medications from {BASE_URL}...")
@@ -987,6 +1297,16 @@ async def entrypoint(ctx: agents.JobContext):
         get_kindura_contacts,
         call_contact,
         send_message_to_contact,
+        # Clinical data collection tools (Reports.md - PD Monitoring)
+        get_clinical_data_gaps,
+        record_bradykinesia,
+        record_tremor,
+        record_rigidity,
+        record_gait_difficulty,
+        record_laterality,
+        record_safety_event,
+        get_motor_symptom_history,
+        get_clinical_reports,
     ]
     print(f"🔧 Registering {len(agent_tools)} function tools with agent")
     for tool in agent_tools:

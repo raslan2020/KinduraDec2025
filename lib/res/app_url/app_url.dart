@@ -5,7 +5,7 @@ class AppUrl {
   // Base URLs for different environments
   // Note: Use your Mac's local IP for physical device testing
   // To find IP: run `ipconfig getifaddr en0` in terminal
-  static const String localBaseUrl = "http://192.168.100.236:8000/api";
+  static const String localBaseUrl = "http://192.168.100.219:8000/api";
   static const String productionBaseUrl = "http://65.109.75.25:8000/api";
 
   // Dynamic base URL based on environment
@@ -75,4 +75,12 @@ class AppUrl {
   static String communicationRequestApproveUrl(int requestId) => "${baseUrl}/communication-requests/$requestId/approve/";
   static String communicationRequestRejectUrl(int requestId) => "${baseUrl}/communication-requests/$requestId/reject/";
   static String communicationRequestCompleteUrl(int requestId) => "${baseUrl}/communication-requests/$requestId/complete/";
+
+  // Clinical Data URLs (Parkinson's monitoring per Reports.md)
+  static String get clinicalProfileUrl => "${baseUrl}/clinical/profile/";
+  static String get motorSymptomsUrl => "${baseUrl}/clinical/motor-symptoms/";
+  static String get nonMotorSymptomsUrl => "${baseUrl}/clinical/non-motor-symptoms/";
+  static String get safetyEventsUrl => "${baseUrl}/clinical/safety-events/";
+  static String get clinicalReportsUrl => "${baseUrl}/clinical/reports/";
+  static String get agentDataGapsUrl => "${baseUrl}/agent/data-gaps/";
 }

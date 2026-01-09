@@ -31,9 +31,12 @@ class InvalidURL extends AppException {
 
 class FetchDataException extends AppException {
   FetchDataException([String? message])
-      : super(message, 'Error While Communication') {
-    userPreferences.removeUser();
-    Get.deleteAll();
-    Get.offAllNamed(RoutesName.splashScreen);
-  }
+      : super(message, 'Error While Communication');
+  // NOTE: Removed auto-logout behavior - exceptions should not have side effects
+  // Logout should only happen explicitly when user requests it or on 401 with proper handling
+}
+
+class UnauthorizedException extends AppException {
+  UnauthorizedException([String? message])
+      : super(message, 'Unauthorized');
 }

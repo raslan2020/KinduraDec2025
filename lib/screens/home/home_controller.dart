@@ -85,6 +85,25 @@ class HomeController extends GetxController {
     'data_available': false,   // NEW: tracks if real data exists
     'source': 'none',          // NEW: tracks data source (api/apple_health/none)
     'last_sync': null,         // NEW: timestamp of last successful sync
+    // === EXTENDED VITALS (HealthKit only) ===
+    'extended_vitals_enabled': false,
+    'walking_steadiness_percent': null,
+    'walking_steadiness_classification': null,
+    'blood_pressure_systolic': null,
+    'blood_pressure_diastolic': null,
+    'blood_glucose': null,
+    'afib_detected': false,
+    'afib_burden_percent': null,
+    'body_temperature': null,
+    'wrist_temperature_delta': null,
+    'six_minute_walk_distance': null,
+    'vo2_max': null,
+    'walking_asymmetry_percent': null,
+    'walking_speed': null,
+    'double_support_time_percent': null,
+    'stair_ascent_speed': null,
+    'stair_descent_speed': null,
+    'peripheral_perfusion_index': null,
   });
   final watchVitalsStatus = Status.COMPLETED.obs;
 
@@ -980,6 +999,85 @@ class HomeController extends GetxController {
       watchVitals.value = mergedVitals;
       watchVitalsStatus.value = Status.COMPLETED;
 
+      // 3. Fetch EXTENDED vitals (additional HealthKit metrics)
+      print("[HomeController] Step 4: Fetching extended vitals from HealthKit...");
+      if (_watchVitalsService != null) {
+        try {
+          final extendedVitals = await _watchVitalsService!.getExtendedVitals();
+          if (extendedVitals != null && extendedVitals.isNotEmpty) {
+            print("[HomeController] Extended vitals received: ${extendedVitals.keys.toList()}");
+
+            // Merge extended vitals
+            if (extendedVitals['walking_steadiness_percent'] != null) {
+              mergedVitals['walking_steadiness_percent'] = extendedVitals['walking_steadiness_percent'];
+              mergedVitals['walking_steadiness_classification'] = extendedVitals['walking_steadiness_classification'];
+              hasRealData = true;
+            }
+            if (extendedVitals['blood_pressure_systolic'] != null) {
+              mergedVitals['blood_pressure_systolic'] = extendedVitals['blood_pressure_systolic'];
+              mergedVitals['blood_pressure_diastolic'] = extendedVitals['blood_pressure_diastolic'];
+              hasRealData = true;
+            }
+            if (extendedVitals['blood_glucose'] != null) {
+              mergedVitals['blood_glucose'] = extendedVitals['blood_glucose'];
+              hasRealData = true;
+            }
+            if (extendedVitals['body_temperature'] != null) {
+              mergedVitals['body_temperature'] = extendedVitals['body_temperature'];
+              hasRealData = true;
+            }
+            if (extendedVitals['wrist_temperature_delta'] != null) {
+              mergedVitals['wrist_temperature_delta'] = extendedVitals['wrist_temperature_delta'];
+              hasRealData = true;
+            }
+            if (extendedVitals['vo2_max'] != null) {
+              mergedVitals['vo2_max'] = extendedVitals['vo2_max'];
+              hasRealData = true;
+            }
+            if (extendedVitals['six_minute_walk_distance'] != null) {
+              mergedVitals['six_minute_walk_distance'] = extendedVitals['six_minute_walk_distance'];
+              hasRealData = true;
+            }
+            if (extendedVitals['walking_asymmetry_percent'] != null) {
+              mergedVitals['walking_asymmetry_percent'] = extendedVitals['walking_asymmetry_percent'];
+              hasRealData = true;
+            }
+            if (extendedVitals['walking_speed'] != null) {
+              mergedVitals['walking_speed'] = extendedVitals['walking_speed'];
+              hasRealData = true;
+            }
+            if (extendedVitals['double_support_time_percent'] != null) {
+              mergedVitals['double_support_time_percent'] = extendedVitals['double_support_time_percent'];
+              hasRealData = true;
+            }
+            if (extendedVitals['stair_ascent_speed'] != null) {
+              mergedVitals['stair_ascent_speed'] = extendedVitals['stair_ascent_speed'];
+              hasRealData = true;
+            }
+            if (extendedVitals['stair_descent_speed'] != null) {
+              mergedVitals['stair_descent_speed'] = extendedVitals['stair_descent_speed'];
+              hasRealData = true;
+            }
+            if (extendedVitals['peripheral_perfusion_index'] != null) {
+              mergedVitals['peripheral_perfusion_index'] = extendedVitals['peripheral_perfusion_index'];
+              hasRealData = true;
+            }
+            if (extendedVitals['afib_detected'] == true) {
+              mergedVitals['afib_detected'] = true;
+              mergedVitals['afib_burden_percent'] = extendedVitals['afib_burden_percent'];
+              hasRealData = true;
+            }
+            // Update watchVitals again with extended data
+            watchVitals.value = Map<String, dynamic>.from(mergedVitals);
+            print("[HomeController] ✅ Extended vitals merged into health data");
+          } else {
+            print("[HomeController] No extended vitals available from HealthKit");
+          }
+        } catch (e) {
+          print("[HomeController] Could not fetch extended vitals: $e");
+        }
+      }
+
       // Summary log
       print("[HomeController] ========== VITALS SUMMARY ==========");
       print("[HomeController] data_available: $hasRealData");
@@ -990,6 +1088,7 @@ class HomeController extends GetxController {
       print("[HomeController] respiratory_rate: ${mergedVitals['respiratory_rate']}");
       print("[HomeController] sleep_hours: ${mergedVitals['sleep_hours']}");
       print("[HomeController] steps: ${mergedVitals['steps']}");
+      print("[HomeController] extended_vitals: BP=${mergedVitals['blood_pressure_systolic']}/${mergedVitals['blood_pressure_diastolic']}, Glucose=${mergedVitals['blood_glucose']}, VO2=${mergedVitals['vo2_max']}");
       print("[HomeController] ====================================");
 
       // Save Apple Health data to PostgreSQL if we got new data

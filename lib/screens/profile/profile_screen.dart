@@ -12,6 +12,7 @@ import 'package:kindura_ai/services/theme_service.dart';
 import 'package:kindura_ai/services/watch_vitals_service.dart';
 import 'package:kindura_ai/screens/home/home_controller.dart';
 import 'package:kindura_ai/models/health/data_source_mode.dart';
+import 'package:kindura_ai/models/user_profile/user_profile_model.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -936,15 +937,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         Icon(
                           Icons.health_and_safety,
                           color: Colors.orange,
-                          size: 24.sp,
+                          size: 20.sp,
                         ),
-                        SizedBox(width: 12.w),
-                        Text(
-                          'How to Enable Apple Fall Detection',
-                          style: TextStyle(
-                            color: Theme.of(context).textTheme.bodyLarge?.color,
-                            fontSize: 14.sp,
-                            fontWeight: FontWeight.bold,
+                        SizedBox(width: 8.w),
+                        Flexible(
+                          child: Text(
+                            'Enable Apple Fall Detection',
+                            style: TextStyle(
+                              color: Theme.of(context).textTheme.bodyLarge?.color,
+                              fontSize: 13.sp,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
                       ],
@@ -1180,6 +1183,139 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ],
                 ),
               ),
+              SizedBox(height: 24.h),
+
+              // Extended Vitals Section
+              Text(
+                'Extended Health Vitals',
+                style: TextStyle(
+                  fontSize: 16.sp,
+                  fontWeight: FontWeight.w600,
+                  color: Theme.of(context).textTheme.bodyLarge?.color,
+                ),
+              ),
+              SizedBox(height: 8.h),
+              Text(
+                'Enable collection of additional health metrics from HealthKit',
+                style: TextStyle(
+                  fontSize: 12.sp,
+                  color: Theme.of(context).textTheme.bodySmall?.color,
+                ),
+              ),
+              SizedBox(height: 12.h),
+              Obx(() => SwitchListTile(
+                    title: Text('Extended Vitals Collection',
+                        style: TextStyle(
+                            color: Theme.of(context).textTheme.bodyLarge?.color,
+                            fontSize: 14.sp,
+                            fontWeight: FontWeight.w500)),
+                    subtitle: Text(
+                        'Walking steadiness, blood glucose, blood pressure, VO2 max, AFib, temperature, mobility metrics',
+                        style: TextStyle(
+                            color: Theme.of(context).textTheme.bodySmall?.color,
+                            fontSize: 11.sp)),
+                    value: profileController.extendedVitalsEnabled.value,
+                    onChanged: (value) {
+                      profileController.extendedVitalsEnabled.value = value;
+                    },
+                    activeColor: AppColor.primaryColor,
+                    contentPadding: EdgeInsets.zero,
+                  )),
+              SizedBox(height: 16.h),
+
+              // Vitals Retention Period
+              Text(
+                'Vitals Data Retention',
+                style: TextStyle(
+                  fontSize: 14.sp,
+                  fontWeight: FontWeight.w500,
+                  color: Theme.of(context).textTheme.bodyLarge?.color,
+                ),
+              ),
+              SizedBox(height: 8.h),
+              Obx(() => Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(color: AppColor.gray500),
+                      borderRadius: BorderRadius.circular(8.w),
+                    ),
+                    child: Column(
+                      children: [
+                        RadioListTile<int>(
+                          title: Text('30 days',
+                              style: TextStyle(
+                                  color: Theme.of(context).textTheme.bodyLarge?.color,
+                                  fontSize: 14.sp,
+                                  fontWeight: FontWeight.w500)),
+                          subtitle: Text('Less storage, recent data only',
+                              style: TextStyle(
+                                  color: Theme.of(context).textTheme.bodySmall?.color, fontSize: 11.sp)),
+                          value: 30,
+                          groupValue: profileController.vitalsRetentionDays.value,
+                          onChanged: (value) {
+                            if (value != null) {
+                              profileController.vitalsRetentionDays.value = value;
+                            }
+                          },
+                          activeColor: AppColor.primaryColor,
+                          contentPadding: EdgeInsets.symmetric(horizontal: 8.w),
+                          dense: true,
+                        ),
+                        Divider(height: 1, color: AppColor.gray500),
+                        RadioListTile<int>(
+                          title: Text('60 days',
+                              style: TextStyle(
+                                  color: Theme.of(context).textTheme.bodyLarge?.color,
+                                  fontSize: 14.sp,
+                                  fontWeight: FontWeight.w500)),
+                          subtitle: Text('More data for trend analysis',
+                              style: TextStyle(
+                                  color: Theme.of(context).textTheme.bodySmall?.color, fontSize: 11.sp)),
+                          value: 60,
+                          groupValue: profileController.vitalsRetentionDays.value,
+                          onChanged: (value) {
+                            if (value != null) {
+                              profileController.vitalsRetentionDays.value = value;
+                            }
+                          },
+                          activeColor: AppColor.primaryColor,
+                          contentPadding: EdgeInsets.symmetric(horizontal: 8.w),
+                          dense: true,
+                        ),
+                      ],
+                    ),
+                  )),
+              SizedBox(height: 8.h),
+              Container(
+                padding: EdgeInsets.all(10.w),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(8.w),
+                  border: Border.all(color: Colors.orange.shade200),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.storage, color: Colors.orange.shade700, size: 16.sp),
+                    SizedBox(width: 8.w),
+                    Expanded(
+                      child: Text(
+                        'Older vitals data will be automatically deleted after this period to save storage space.',
+                        style: TextStyle(
+                          fontSize: 10.sp,
+                          color: Colors.orange.shade900,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(height: 16.h),
+
+              // Individual Extended Vitals Toggles
+              Obx(() => profileController.extendedVitalsEnabled.value
+                  ? _buildExtendedVitalsToggles(context, profileController)
+                  : SizedBox.shrink()),
+
               SizedBox(height: 24.h),
 
               // Caregiver Notifications Section
@@ -1764,6 +1900,152 @@ class _ProfileScreenState extends State<ProfileScreen> {
               Icon(Icons.check_circle, color: color, size: 20.sp),
           ],
         ),
+      ),
+    );
+  }
+
+  /// Build the extended vitals toggles section
+  Widget _buildExtendedVitalsToggles(BuildContext context, ProfileController controller) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Header with Enable/Disable All buttons
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Individual Vitals',
+              style: TextStyle(
+                fontSize: 14.sp,
+                fontWeight: FontWeight.w600,
+                color: Theme.of(context).textTheme.bodyLarge?.color,
+              ),
+            ),
+            Row(
+              children: [
+                TextButton(
+                  onPressed: () => controller.enableAllVitals(),
+                  style: TextButton.styleFrom(
+                    padding: EdgeInsets.symmetric(horizontal: 8.w),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  child: Text('All On', style: TextStyle(fontSize: 11.sp, color: Colors.green)),
+                ),
+                Text('|', style: TextStyle(color: Colors.grey, fontSize: 11.sp)),
+                TextButton(
+                  onPressed: () => controller.disableAllVitals(),
+                  style: TextButton.styleFrom(
+                    padding: EdgeInsets.symmetric(horizontal: 8.w),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  child: Text('All Off', style: TextStyle(fontSize: 11.sp, color: Colors.red)),
+                ),
+              ],
+            ),
+          ],
+        ),
+        SizedBox(height: 8.h),
+
+        // Vitals grouped by category
+        ...ExtendedVitalsPreferences.categories.entries.map((category) {
+          return _buildVitalCategory(context, controller, category.key, category.value);
+        }).toList(),
+      ],
+    );
+  }
+
+  /// Build a category of vitals with toggles
+  Widget _buildVitalCategory(
+    BuildContext context,
+    ProfileController controller,
+    String categoryName,
+    List<String> vitalKeys,
+  ) {
+    // Category icons
+    final categoryIcons = {
+      'Cardiovascular': Icons.favorite,
+      'Metabolic': Icons.thermostat,
+      'Fitness': Icons.fitness_center,
+      'Mobility': Icons.directions_walk,
+    };
+
+    // Category colors
+    final categoryColors = {
+      'Cardiovascular': Colors.red,
+      'Metabolic': Colors.orange,
+      'Fitness': Colors.blue,
+      'Mobility': Colors.teal,
+    };
+
+    return Container(
+      margin: EdgeInsets.only(bottom: 12.h),
+      decoration: BoxDecoration(
+        border: Border.all(color: AppColor.gray500.withOpacity(0.5)),
+        borderRadius: BorderRadius.circular(8.w),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Category header
+          Container(
+            padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
+            decoration: BoxDecoration(
+              color: (categoryColors[categoryName] ?? Colors.grey).withOpacity(0.1),
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(7.w),
+                topRight: Radius.circular(7.w),
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  categoryIcons[categoryName] ?? Icons.health_and_safety,
+                  size: 16.sp,
+                  color: categoryColors[categoryName] ?? Colors.grey,
+                ),
+                SizedBox(width: 8.w),
+                Text(
+                  categoryName,
+                  style: TextStyle(
+                    fontSize: 12.sp,
+                    fontWeight: FontWeight.w600,
+                    color: categoryColors[categoryName] ?? Colors.grey,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Vital toggles
+          ...vitalKeys.asMap().entries.map((entry) {
+            final index = entry.key;
+            final vitalKey = entry.value;
+            final displayName = ExtendedVitalsPreferences.displayNames[vitalKey] ?? vitalKey;
+            final isLast = index == vitalKeys.length - 1;
+
+            return Column(
+              children: [
+                Obx(() => SwitchListTile(
+                      title: Text(
+                        displayName,
+                        style: TextStyle(
+                          fontSize: 13.sp,
+                          color: Theme.of(context).textTheme.bodyLarge?.color,
+                        ),
+                      ),
+                      value: controller.isVitalEnabled(vitalKey),
+                      onChanged: (value) => controller.toggleVital(vitalKey, value),
+                      activeColor: categoryColors[categoryName] ?? AppColor.primaryColor,
+                      contentPadding: EdgeInsets.symmetric(horizontal: 12.w),
+                      dense: true,
+                      visualDensity: VisualDensity.compact,
+                    )),
+                if (!isLast) Divider(height: 1, indent: 12.w, endIndent: 12.w, color: AppColor.gray500.withOpacity(0.3)),
+              ],
+            );
+          }).toList(),
+        ],
       ),
     );
   }

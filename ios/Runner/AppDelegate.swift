@@ -161,6 +161,9 @@ import MessageUI
             case "getHealthSummary":
                 self?.getHealthSummary(result: result)
 
+            case "getExtendedVitals":
+                self?.fetchExtendedVitals(result: result)
+
             case "getSleepData":
                 self?.getSleepData(result: result)
 
@@ -1656,6 +1659,428 @@ import MessageUI
         healthStore.execute(query)
     }
 
+    // MARK: - Extended Vitals Fetch Functions
+
+    /// Fetch extended vitals data from HealthKit
+    /// Returns a dictionary with all extended vitals for display and storage
+    private func fetchExtendedVitals(result: @escaping FlutterResult) {
+        let group = DispatchGroup()
+        var extendedData: [String: Any] = [:]
+
+        // Walking Steadiness (iOS 15+)
+        group.enter()
+        fetchWalkingSteadiness { percent, classification in
+            extendedData["walking_steadiness_percent"] = percent
+            extendedData["walking_steadiness_classification"] = classification
+            group.leave()
+        }
+
+        // Blood Pressure
+        group.enter()
+        fetchBloodPressure { systolic, diastolic in
+            extendedData["blood_pressure_systolic"] = systolic
+            extendedData["blood_pressure_diastolic"] = diastolic
+            group.leave()
+        }
+
+        // Blood Glucose
+        group.enter()
+        fetchBloodGlucose { value in
+            extendedData["blood_glucose"] = value
+            group.leave()
+        }
+
+        // Body Temperature
+        group.enter()
+        fetchBodyTemperature { value in
+            extendedData["body_temperature"] = value
+            group.leave()
+        }
+
+        // Wrist Temperature (iOS 16+)
+        group.enter()
+        fetchWristTemperature { delta in
+            extendedData["wrist_temperature_delta"] = delta
+            group.leave()
+        }
+
+        // Six-Minute Walk Distance
+        group.enter()
+        fetchSixMinuteWalkDistance { value in
+            extendedData["six_minute_walk_distance"] = value
+            group.leave()
+        }
+
+        // VO2 Max
+        group.enter()
+        fetchVO2Max { value in
+            extendedData["vo2_max"] = value
+            group.leave()
+        }
+
+        // Mobility Metrics
+        group.enter()
+        fetchMobilityMetrics { metrics in
+            extendedData.merge(metrics) { (_, new) in new }
+            group.leave()
+        }
+
+        // Peripheral Perfusion Index
+        group.enter()
+        fetchPeripheralPerfusionIndex { value in
+            extendedData["peripheral_perfusion_index"] = value
+            group.leave()
+        }
+
+        // AFib Detection (from ECG)
+        group.enter()
+        fetchAFibStatus { detected, burden in
+            extendedData["afib_detected"] = detected
+            extendedData["afib_burden_percent"] = burden
+            group.leave()
+        }
+
+        group.notify(queue: .main) {
+            extendedData["timestamp"] = ISO8601DateFormatter().string(from: Date())
+            print("[AppDelegate] 📊 Extended vitals fetched: \(extendedData.keys.count) metrics")
+            result(extendedData)
+        }
+    }
+
+    /// Fetch Walking Steadiness (iOS 15+)
+    private func fetchWalkingSteadiness(completion: @escaping (Double?, String?) -> Void) {
+        if #available(iOS 15.0, *) {
+            guard let steadinessType = HKQuantityType.quantityType(forIdentifier: .appleWalkingSteadiness) else {
+                completion(nil, nil)
+                return
+            }
+
+            let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
+            let query = HKSampleQuery(sampleType: steadinessType, predicate: nil, limit: 1, sortDescriptors: [sortDescriptor]) { _, samples, _ in
+                guard let sample = samples?.first as? HKQuantitySample else {
+                    completion(nil, nil)
+                    return
+                }
+
+                let value = sample.quantity.doubleValue(for: .percent()) * 100
+                let classification: String
+                if value >= 75 {
+                    classification = "OK"
+                } else if value >= 50 {
+                    classification = "Low"
+                } else {
+                    classification = "Very Low"
+                }
+
+                print("[AppDelegate] 🚶 Walking Steadiness: \(value)% (\(classification))")
+                completion(value, classification)
+            }
+
+            self.healthStore.execute(query)
+        } else {
+            completion(nil, nil)
+        }
+    }
+
+    /// Fetch Blood Pressure
+    private func fetchBloodPressure(completion: @escaping (Double?, Double?) -> Void) {
+        guard let systolicType = HKQuantityType.quantityType(forIdentifier: .bloodPressureSystolic),
+              let diastolicType = HKQuantityType.quantityType(forIdentifier: .bloodPressureDiastolic) else {
+            completion(nil, nil)
+            return
+        }
+
+        let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
+
+        // Fetch systolic
+        let systolicQuery = HKSampleQuery(sampleType: systolicType, predicate: nil, limit: 1, sortDescriptors: [sortDescriptor]) { _, samples, _ in
+            let systolic = (samples?.first as? HKQuantitySample)?.quantity.doubleValue(for: .millimeterOfMercury())
+
+            // Fetch diastolic
+            let diastolicQuery = HKSampleQuery(sampleType: diastolicType, predicate: nil, limit: 1, sortDescriptors: [sortDescriptor]) { _, samples, _ in
+                let diastolic = (samples?.first as? HKQuantitySample)?.quantity.doubleValue(for: .millimeterOfMercury())
+
+                if let sys = systolic, let dia = diastolic {
+                    print("[AppDelegate] 💓 Blood Pressure: \(Int(sys))/\(Int(dia)) mmHg")
+                }
+                completion(systolic, diastolic)
+            }
+
+            self.healthStore.execute(diastolicQuery)
+        }
+
+        healthStore.execute(systolicQuery)
+    }
+
+    /// Fetch Blood Glucose
+    private func fetchBloodGlucose(completion: @escaping (Double?) -> Void) {
+        guard let glucoseType = HKQuantityType.quantityType(forIdentifier: .bloodGlucose) else {
+            completion(nil)
+            return
+        }
+
+        let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
+        let query = HKSampleQuery(sampleType: glucoseType, predicate: nil, limit: 1, sortDescriptors: [sortDescriptor]) { _, samples, _ in
+            guard let sample = samples?.first as? HKQuantitySample else {
+                completion(nil)
+                return
+            }
+
+            // Return in mg/dL
+            let value = sample.quantity.doubleValue(for: HKUnit.gramUnit(with: .milli).unitDivided(by: .literUnit(with: .deci)))
+            print("[AppDelegate] 🩸 Blood Glucose: \(value) mg/dL")
+            completion(value)
+        }
+
+        healthStore.execute(query)
+    }
+
+    /// Fetch Body Temperature
+    private func fetchBodyTemperature(completion: @escaping (Double?) -> Void) {
+        guard let tempType = HKQuantityType.quantityType(forIdentifier: .bodyTemperature) else {
+            completion(nil)
+            return
+        }
+
+        let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
+        let query = HKSampleQuery(sampleType: tempType, predicate: nil, limit: 1, sortDescriptors: [sortDescriptor]) { _, samples, _ in
+            guard let sample = samples?.first as? HKQuantitySample else {
+                completion(nil)
+                return
+            }
+
+            let value = sample.quantity.doubleValue(for: .degreeCelsius())
+            print("[AppDelegate] 🌡️ Body Temperature: \(value)°C")
+            completion(value)
+        }
+
+        healthStore.execute(query)
+    }
+
+    /// Fetch Wrist Temperature (iOS 16+)
+    private func fetchWristTemperature(completion: @escaping (Double?) -> Void) {
+        if #available(iOS 16.0, *) {
+            guard let wristTempType = HKQuantityType.quantityType(forIdentifier: .appleSleepingWristTemperature) else {
+                completion(nil)
+                return
+            }
+
+            let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
+            let query = HKSampleQuery(sampleType: wristTempType, predicate: nil, limit: 1, sortDescriptors: [sortDescriptor]) { _, samples, _ in
+                guard let sample = samples?.first as? HKQuantitySample else {
+                    completion(nil)
+                    return
+                }
+
+                let delta = sample.quantity.doubleValue(for: .degreeCelsius())
+                print("[AppDelegate] 🌡️ Wrist Temp Delta: \(delta)°C")
+                completion(delta)
+            }
+
+            self.healthStore.execute(query)
+        } else {
+            completion(nil)
+        }
+    }
+
+    /// Fetch Six-Minute Walk Test Distance (iOS 14+)
+    private func fetchSixMinuteWalkDistance(completion: @escaping (Double?) -> Void) {
+        if #available(iOS 14.0, *) {
+            guard let walkType = HKQuantityType.quantityType(forIdentifier: .sixMinuteWalkTestDistance) else {
+                completion(nil)
+                return
+            }
+
+            let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
+            let query = HKSampleQuery(sampleType: walkType, predicate: nil, limit: 1, sortDescriptors: [sortDescriptor]) { _, samples, _ in
+                guard let sample = samples?.first as? HKQuantitySample else {
+                    completion(nil)
+                    return
+                }
+
+                let value = sample.quantity.doubleValue(for: .meter())
+                print("[AppDelegate] 🏃 Six-Minute Walk: \(value) meters")
+                completion(value)
+            }
+
+            self.healthStore.execute(query)
+        } else {
+            completion(nil)
+        }
+    }
+
+    /// Fetch VO2 Max (iOS 11+)
+    private func fetchVO2Max(completion: @escaping (Double?) -> Void) {
+        if #available(iOS 11.0, *) {
+            guard let vo2Type = HKQuantityType.quantityType(forIdentifier: .vo2Max) else {
+                completion(nil)
+                return
+            }
+
+            let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
+            let query = HKSampleQuery(sampleType: vo2Type, predicate: nil, limit: 1, sortDescriptors: [sortDescriptor]) { _, samples, _ in
+                guard let sample = samples?.first as? HKQuantitySample else {
+                    completion(nil)
+                    return
+                }
+
+                // mL/kg/min
+                let unit = HKUnit.literUnit(with: .milli).unitDivided(by: HKUnit.gramUnit(with: .kilo).unitMultiplied(by: .minute()))
+                let value = sample.quantity.doubleValue(for: unit)
+                print("[AppDelegate] 💪 VO2 Max: \(value) mL/kg/min")
+                completion(value)
+            }
+
+            self.healthStore.execute(query)
+        } else {
+            completion(nil)
+        }
+    }
+
+    /// Fetch Mobility Metrics (iOS 14+)
+    private func fetchMobilityMetrics(completion: @escaping ([String: Any]) -> Void) {
+        if #available(iOS 14.0, *) {
+            var metrics: [String: Any] = [:]
+            let group = DispatchGroup()
+
+            // Walking Asymmetry
+            if let asymmetryType = HKQuantityType.quantityType(forIdentifier: .walkingAsymmetryPercentage) {
+                group.enter()
+                let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
+                let query = HKSampleQuery(sampleType: asymmetryType, predicate: nil, limit: 1, sortDescriptors: [sortDescriptor]) { _, samples, _ in
+                    if let sample = samples?.first as? HKQuantitySample {
+                        metrics["walking_asymmetry_percent"] = sample.quantity.doubleValue(for: .percent()) * 100
+                    }
+                    group.leave()
+                }
+                self.healthStore.execute(query)
+            }
+
+            // Walking Speed
+            if let speedType = HKQuantityType.quantityType(forIdentifier: .walkingSpeed) {
+                group.enter()
+                let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
+                let query = HKSampleQuery(sampleType: speedType, predicate: nil, limit: 1, sortDescriptors: [sortDescriptor]) { _, samples, _ in
+                    if let sample = samples?.first as? HKQuantitySample {
+                        metrics["walking_speed"] = sample.quantity.doubleValue(for: HKUnit.meter().unitDivided(by: .second()))
+                    }
+                    group.leave()
+                }
+                self.healthStore.execute(query)
+            }
+
+            // Double Support Time
+            if let doubleSupportType = HKQuantityType.quantityType(forIdentifier: .walkingDoubleSupportPercentage) {
+                group.enter()
+                let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
+                let query = HKSampleQuery(sampleType: doubleSupportType, predicate: nil, limit: 1, sortDescriptors: [sortDescriptor]) { _, samples, _ in
+                    if let sample = samples?.first as? HKQuantitySample {
+                        metrics["double_support_time_percent"] = sample.quantity.doubleValue(for: .percent()) * 100
+                    }
+                    group.leave()
+                }
+                self.healthStore.execute(query)
+            }
+
+            // Stair Ascent Speed
+            if let ascentType = HKQuantityType.quantityType(forIdentifier: .stairAscentSpeed) {
+                group.enter()
+                let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
+                let query = HKSampleQuery(sampleType: ascentType, predicate: nil, limit: 1, sortDescriptors: [sortDescriptor]) { _, samples, _ in
+                    if let sample = samples?.first as? HKQuantitySample {
+                        metrics["stair_ascent_speed"] = sample.quantity.doubleValue(for: HKUnit.meter().unitDivided(by: .second()))
+                    }
+                    group.leave()
+                }
+                self.healthStore.execute(query)
+            }
+
+            // Stair Descent Speed
+            if let descentType = HKQuantityType.quantityType(forIdentifier: .stairDescentSpeed) {
+                group.enter()
+                let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
+                let query = HKSampleQuery(sampleType: descentType, predicate: nil, limit: 1, sortDescriptors: [sortDescriptor]) { _, samples, _ in
+                    if let sample = samples?.first as? HKQuantitySample {
+                        metrics["stair_descent_speed"] = sample.quantity.doubleValue(for: HKUnit.meter().unitDivided(by: .second()))
+                    }
+                    group.leave()
+                }
+                self.healthStore.execute(query)
+            }
+
+            group.notify(queue: .main) {
+                print("[AppDelegate] 🚶 Mobility Metrics: \(metrics)")
+                completion(metrics)
+            }
+        } else {
+            completion([:])
+        }
+    }
+
+    /// Fetch Peripheral Perfusion Index (iOS 11+)
+    private func fetchPeripheralPerfusionIndex(completion: @escaping (Double?) -> Void) {
+        if #available(iOS 11.0, *) {
+            guard let perfusionType = HKQuantityType.quantityType(forIdentifier: .peripheralPerfusionIndex) else {
+                completion(nil)
+                return
+            }
+
+            let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
+            let query = HKSampleQuery(sampleType: perfusionType, predicate: nil, limit: 1, sortDescriptors: [sortDescriptor]) { _, samples, _ in
+                guard let sample = samples?.first as? HKQuantitySample else {
+                    completion(nil)
+                    return
+                }
+
+                let value = sample.quantity.doubleValue(for: .percent()) * 100
+                print("[AppDelegate] 🩺 Peripheral Perfusion Index: \(value)%")
+                completion(value)
+            }
+
+            self.healthStore.execute(query)
+        } else {
+            completion(nil)
+        }
+    }
+
+    /// Fetch AFib Status from ECG (iOS 14.3+)
+    private func fetchAFibStatus(completion: @escaping (Bool, Double?) -> Void) {
+        if #available(iOS 14.3, *) {
+            let ecgType = HKObjectType.electrocardiogramType()
+            let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
+
+            // Query for recent ECGs (last 30 days)
+            let thirtyDaysAgo = Calendar.current.date(byAdding: .day, value: -30, to: Date())!
+            let predicate = HKQuery.predicateForSamples(withStart: thirtyDaysAgo, end: Date(), options: .strictStartDate)
+
+            let query = HKSampleQuery(sampleType: ecgType, predicate: predicate, limit: 10, sortDescriptors: [sortDescriptor]) { _, samples, _ in
+                guard let ecgSamples = samples as? [HKElectrocardiogram] else {
+                    completion(false, nil)
+                    return
+                }
+
+                var afibCount = 0
+                for ecg in ecgSamples {
+                    if ecg.classification == .atrialFibrillation {
+                        afibCount += 1
+                    }
+                }
+
+                let afibDetected = afibCount > 0
+                let afibBurden = ecgSamples.count > 0 ? Double(afibCount) / Double(ecgSamples.count) * 100 : nil
+
+                if afibDetected {
+                    print("[AppDelegate] ⚠️ AFib Detected! Burden: \(afibBurden ?? 0)%")
+                }
+                completion(afibDetected, afibBurden)
+            }
+
+            self.healthStore.execute(query)
+        } else {
+            completion(false, nil)
+        }
+    }
+
     // MARK: - HealthKit Authorization
 
     private func requestHealthKitAuthorization(result: @escaping FlutterResult) {
@@ -1695,15 +2120,80 @@ import MessageUI
             HKObjectType.quantityType(forIdentifier: .bloodPressureSystolic)!,
             HKObjectType.quantityType(forIdentifier: .bloodPressureDiastolic)!,
 
+            // Blood Glucose
+            HKObjectType.quantityType(forIdentifier: .bloodGlucose)!,
+
+            // Body Temperature
+            HKObjectType.quantityType(forIdentifier: .bodyTemperature)!,
+
+            // Falls
+            HKObjectType.quantityType(forIdentifier: .numberOfTimesFallen)!,
+
             // Workouts
             HKObjectType.workoutType(),
         ]
+
+        // Add iOS 11+ types
+        if #available(iOS 11.0, *) {
+            // VO2 Max - Cardiovascular fitness
+            if let vo2MaxType = HKObjectType.quantityType(forIdentifier: .vo2Max) {
+                typesToRead.insert(vo2MaxType)
+            }
+            // Peripheral Perfusion Index
+            if let perfusionType = HKObjectType.quantityType(forIdentifier: .peripheralPerfusionIndex) {
+                typesToRead.insert(perfusionType)
+            }
+        }
+
+        // Add iOS 14+ types - Mobility metrics
+        if #available(iOS 14.0, *) {
+            // Six-Minute Walk Distance
+            if let sixMinWalkType = HKObjectType.quantityType(forIdentifier: .sixMinuteWalkTestDistance) {
+                typesToRead.insert(sixMinWalkType)
+            }
+            // Walking Speed
+            if let walkingSpeedType = HKObjectType.quantityType(forIdentifier: .walkingSpeed) {
+                typesToRead.insert(walkingSpeedType)
+            }
+            // Walking Asymmetry
+            if let asymmetryType = HKObjectType.quantityType(forIdentifier: .walkingAsymmetryPercentage) {
+                typesToRead.insert(asymmetryType)
+            }
+            // Double Support Time
+            if let doubleSupportType = HKObjectType.quantityType(forIdentifier: .walkingDoubleSupportPercentage) {
+                typesToRead.insert(doubleSupportType)
+            }
+            // Stair Ascent Speed
+            if let stairAscentType = HKObjectType.quantityType(forIdentifier: .stairAscentSpeed) {
+                typesToRead.insert(stairAscentType)
+            }
+            // Stair Descent Speed
+            if let stairDescentType = HKObjectType.quantityType(forIdentifier: .stairDescentSpeed) {
+                typesToRead.insert(stairDescentType)
+            }
+        }
 
         // Add iOS 14.3+ types
         if #available(iOS 14.3, *) {
             // AFib History (ECG)
             let afibType = HKObjectType.electrocardiogramType()
             typesToRead.insert(afibType)
+        }
+
+        // Add iOS 15+ types
+        if #available(iOS 15.0, *) {
+            // Walking Steadiness
+            if let steadinessType = HKObjectType.quantityType(forIdentifier: .appleWalkingSteadiness) {
+                typesToRead.insert(steadinessType)
+            }
+        }
+
+        // Add iOS 16+ types
+        if #available(iOS 16.0, *) {
+            // Sleeping Wrist Temperature
+            if let wristTempType = HKObjectType.quantityType(forIdentifier: .appleSleepingWristTemperature) {
+                typesToRead.insert(wristTempType)
+            }
         }
 
         // Add iOS 17+ types (State of Mind)

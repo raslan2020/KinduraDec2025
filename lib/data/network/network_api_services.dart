@@ -616,6 +616,25 @@ class NetworkApiServices extends BaseApiServices {
       case 422:
         return jsonDecode(response.body);
 
+      case 401:
+        // Unauthorized - token expired or invalid
+        // Return error response instead of throwing exception that logs user out
+        print('401 Unauthorized response received');
+        return {
+          'status': false,
+          'message': 'Session expired. Please login again.',
+          'error': 'Unauthorized (401)',
+          'unauthorized': true,
+        };
+
+      case 403:
+        // Forbidden - user doesn't have permission
+        return {
+          'status': false,
+          'message': 'You do not have permission to access this resource.',
+          'error': 'Forbidden (403)'
+        };
+
       case 404:
         // Don't return HTML error pages as the message
         String errorMessage = 'Resource not found';
@@ -637,13 +656,27 @@ class NetworkApiServices extends BaseApiServices {
           'error': 'Not Found (404)'
         };
 
+      case 500:
+      case 502:
+      case 503:
+      case 504:
+        // Server errors - don't logout, just return error
+        return {
+          'status': false,
+          'message': 'Server error. Please try again later.',
+          'error': 'Server Error (${response.statusCode})'
+        };
+
       default:
         try {
           return jsonDecode(response.body);
         } catch (_) {
-          throw FetchDataException(
-            'Unexpected error: ${response.statusCode}',
-          );
+          // Return error response instead of throwing exception
+          return {
+            'status': false,
+            'message': 'Unexpected error occurred',
+            'error': 'Error (${response.statusCode})'
+          };
         }
     }
   }

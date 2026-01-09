@@ -333,6 +333,11 @@ class UserViewSet(viewsets.ViewSet):
 
         reports_data = []
         for report in reports:
+            # Fetch clinical data for this report's period
+            clinical_data = self._get_clinical_data_for_period(
+                request.user, report.period_start, report.period_end
+            )
+
             reports_data.append({
                 'id': report.id,
                 'report_type': report.report_type,
@@ -361,6 +366,8 @@ class UserViewSet(viewsets.ViewSet):
                 # Fall events
                 'fall_count': report.fall_count,
                 'fall_events': report.fall_events,
+                # Clinical data (per Reports.md)
+                'clinical_data': clinical_data,
                 # AI analysis
                 'ai_summary': report.ai_summary,
                 'ai_observations': report.ai_observations,
@@ -372,6 +379,7 @@ class UserViewSet(viewsets.ViewSet):
                 'ai_sleep_analysis': report.ai_sleep_analysis,
                 'ai_vitals_analysis': report.ai_vitals_analysis,
                 'ai_side_effect_correlations': report.ai_side_effect_correlations,
+                'ai_clinical_insights': clinical_data.get('ai_insights'),
                 # Meta
                 'conversation_count': report.conversation_count,
                 'is_finalized': report.is_finalized,
@@ -380,6 +388,93 @@ class UserViewSet(viewsets.ViewSet):
             })
 
         return success_response(reports_data)
+
+    def _get_clinical_data_for_period(self, user, start_date, end_date):
+        """
+        Fetch clinical data (motor symptoms, non-motor symptoms, safety events)
+        for a given period. Per Reports.md specification.
+        """
+        try:
+            from health_profile.models import MotorSymptomEntry, NonMotorSymptomEntry, SafetyEvent
+
+            # Fetch motor symptoms for period
+            motor_symptoms = MotorSymptomEntry.objects.filter(
+                user=user,
+                recorded_date__gte=start_date,
+                recorded_date__lte=end_date
+            ).order_by('recorded_date').values(
+                'recorded_date', 'bradykinesia', 'tremor', 'rigidity',
+                'gait_difficulty', 'laterality', 'data_source'
+            )
+
+            # Fetch non-motor symptoms for period
+            non_motor_symptoms = NonMotorSymptomEntry.objects.filter(
+                user=user,
+                recorded_date__gte=start_date,
+                recorded_date__lte=end_date
+            ).order_by('recorded_date').values(
+                'recorded_date', 'sleep_quality', 'constipation', 'mood',
+                'fatigue', 'dizziness', 'smell_loss', 'rem_behavior', 'data_source'
+            )
+
+            # Fetch safety events for period
+            safety_events = SafetyEvent.objects.filter(
+                user=user,
+                occurred_at__date__gte=start_date,
+                occurred_at__date__lte=end_date
+            ).order_by('-occurred_at').values(
+                'event_type', 'severity', 'description', 'occurred_at',
+                'injury_sustained', 'data_source'
+            )
+
+            # Calculate motor symptom averages
+            motor_score = {}
+            if motor_symptoms:
+                motor_list = list(motor_symptoms)
+                motor_score = {
+                    'bradykinesia_avg': sum(m['bradykinesia'] or 0 for m in motor_list) / len(motor_list),
+                    'tremor_avg': sum(m['tremor'] or 0 for m in motor_list) / len(motor_list),
+                    'rigidity_avg': sum(m['rigidity'] or 0 for m in motor_list) / len(motor_list),
+                    'gait_avg': sum(m['gait_difficulty'] or 0 for m in motor_list) / len(motor_list),
+                    'laterality': motor_list[-1]['laterality'] if motor_list else None,
+                }
+
+            # Calculate non-motor symptom averages
+            non_motor_score = {}
+            if non_motor_symptoms:
+                non_motor_list = list(non_motor_symptoms)
+                non_motor_score = {
+                    'sleep_avg': sum(m['sleep_quality'] or 0 for m in non_motor_list) / len(non_motor_list),
+                    'constipation_avg': sum(m['constipation'] or 0 for m in non_motor_list) / len(non_motor_list),
+                    'mood_avg': sum(m['mood'] or 0 for m in non_motor_list) / len(non_motor_list),
+                    'fatigue_avg': sum(m['fatigue'] or 0 for m in non_motor_list) / len(non_motor_list),
+                }
+
+            # Calculate data completeness per Reports.md Section 6
+            days_in_period = (end_date - start_date).days + 1
+            motor_days = motor_symptoms.count()
+            completeness = min(100, (motor_days / days_in_period) * 100) if days_in_period > 0 else 0
+
+            return {
+                'motor_symptoms': list(motor_symptoms),
+                'non_motor_symptoms': list(non_motor_symptoms),
+                'safety_events': list(safety_events),
+                'motor_score': motor_score,
+                'non_motor_score': non_motor_score,
+                'data_completeness': round(completeness, 1),
+                'ai_insights': None,  # Populated during report generation
+            }
+        except Exception as e:
+            print(f"Error fetching clinical data: {e}")
+            return {
+                'motor_symptoms': [],
+                'non_motor_symptoms': [],
+                'safety_events': [],
+                'motor_score': {},
+                'non_motor_score': {},
+                'data_completeness': 0,
+                'ai_insights': None,
+            }
 
     @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated], url_path='patient_reports/(?P<report_id>[^/.]+)')
     def patient_report_detail(self, request, report_id=None):

@@ -791,6 +791,9 @@ class _HomeState extends State<Home> with SingleTickerProviderStateMixin {
                   ),
               ],
             ),
+
+            // Extended Vitals Section (Walking Steadiness, Blood Glucose, etc.)
+            _buildExtendedVitalsSection(vitals, textColor, subtextColor),
           ],
         ),
       );
@@ -826,6 +829,379 @@ class _HomeState extends State<Home> with SingleTickerProviderStateMixin {
         ),
       ],
     );
+  }
+
+  /// Build extended vitals section (Walking Steadiness, Blood Glucose, etc.)
+  Widget _buildExtendedVitalsSection(Map<String, dynamic> vitals, Color textColor, Color subtextColor) {
+    // Check if user has enabled extended vitals in settings
+    final extendedVitalsEnabled = homeController.userProfile.value.result?.extendedVitalsEnabled ?? false;
+    if (!extendedVitalsEnabled) {
+      return SizedBox.shrink(); // Don't show if not enabled in settings
+    }
+
+    // Helper to safely convert to double (handles int, double, String)
+    double? toDouble(dynamic value) {
+      if (value == null) return null;
+      if (value is double) return value;
+      if (value is int) return value.toDouble();
+      if (value is String) return double.tryParse(value);
+      return null;
+    }
+
+    // Get user preferences for which individual vitals to display
+    final userPrefs = homeController.userProfile.value.result?.extendedVitalsPreferences ?? {};
+
+    // Helper to check if a vital is enabled in user preferences (default true if not set)
+    bool isEnabled(String key) => userPrefs[key] ?? true;
+
+    // Extract all extended vitals with safe type conversion
+    // Only extract if the vital is enabled in user preferences
+    final walkingSteadiness = isEnabled('walking_steadiness') ? toDouble(vitals['walking_steadiness_percent']) : null;
+    final walkingClassification = isEnabled('walking_steadiness') ? vitals['walking_steadiness_classification']?.toString() : null;
+    final bloodGlucose = isEnabled('blood_glucose') ? toDouble(vitals['blood_glucose']) : null;
+    final bloodPressureSystolic = isEnabled('blood_pressure') ? toDouble(vitals['blood_pressure_systolic']) : null;
+    final bloodPressureDiastolic = isEnabled('blood_pressure') ? toDouble(vitals['blood_pressure_diastolic']) : null;
+    final bodyTemperature = isEnabled('body_temperature') ? toDouble(vitals['body_temperature']) : null;
+    final wristTempDelta = isEnabled('wrist_temperature') ? toDouble(vitals['wrist_temperature_delta']) : null;
+    final vo2Max = isEnabled('vo2_max') ? toDouble(vitals['vo2_max']) : null;
+    final afibDetected = isEnabled('afib_detection') ? vitals['afib_detected'] == true : false;
+    final afibBurden = isEnabled('afib_detection') ? toDouble(vitals['afib_burden_percent']) : null;
+    final sixMinWalk = isEnabled('six_min_walk') ? toDouble(vitals['six_minute_walk_distance']) : null;
+    final walkingAsymmetry = isEnabled('walking_asymmetry') ? toDouble(vitals['walking_asymmetry_percent']) : null;
+    final walkingSpeed = isEnabled('walking_speed') ? toDouble(vitals['walking_speed']) : null;
+    final doubleSupportTime = isEnabled('double_support_time') ? toDouble(vitals['double_support_time_percent']) : null;
+    final stairAscent = isEnabled('stair_ascent') ? toDouble(vitals['stair_ascent_speed']) : null;
+    final stairDescent = isEnabled('stair_descent') ? toDouble(vitals['stair_descent_speed']) : null;
+    final perfusionIndex = isEnabled('peripheral_perfusion') ? toDouble(vitals['peripheral_perfusion_index']) : null;
+
+    // Check if we have any extended vitals data (that are also enabled)
+    final hasData = walkingSteadiness != null || bloodGlucose != null ||
+        bloodPressureSystolic != null || vo2Max != null || bodyTemperature != null ||
+        sixMinWalk != null || walkingSpeed != null || stairAscent != null ||
+        perfusionIndex != null || afibDetected;
+
+    if (!hasData) return SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(height: 8.h),
+        Divider(height: 1, color: subtextColor.withOpacity(0.2)),
+        SizedBox(height: 8.h),
+
+        // Extended Vitals Header
+        Row(
+          children: [
+            Icon(Icons.monitor_heart, color: Colors.purple, size: 12.sp),
+            SizedBox(width: 4.w),
+            Text(
+              'Extended Vitals',
+              style: TextStyle(
+                fontSize: 10.sp,
+                fontWeight: FontWeight.bold,
+                color: textColor,
+              ),
+            ),
+          ],
+        ),
+        SizedBox(height: 8.h),
+
+        // AFib Alert Banner (if detected)
+        if (afibDetected)
+          Container(
+            margin: EdgeInsets.only(bottom: 8.h),
+            padding: EdgeInsets.all(8.w),
+            decoration: BoxDecoration(
+              color: Colors.red.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8.w),
+              border: Border.all(color: Colors.red.withOpacity(0.3)),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.warning_amber, color: Colors.red, size: 16.sp),
+                SizedBox(width: 8.w),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'AFib Detected - Consult Your Doctor',
+                        style: TextStyle(
+                          color: Colors.red,
+                          fontSize: 11.sp,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      if (afibBurden != null)
+                        Text(
+                          'Burden: ${afibBurden.toStringAsFixed(1)}%',
+                          style: TextStyle(
+                            color: Colors.red.shade700,
+                            fontSize: 9.sp,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+        // Walking Steadiness (prominent display)
+        if (walkingSteadiness != null) ...[
+          Row(
+            children: [
+              Icon(Icons.directions_walk, color: _getWalkingSteadinessColor(walkingClassification), size: 14.sp),
+              SizedBox(width: 6.w),
+              Text(
+                'Walking Steadiness',
+                style: TextStyle(fontSize: 11.sp, fontWeight: FontWeight.w600, color: textColor),
+              ),
+              Spacer(),
+              Container(
+                padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 4.h),
+                decoration: BoxDecoration(
+                  color: _getWalkingSteadinessColor(walkingClassification).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12.w),
+                ),
+                child: Text(
+                  '${walkingSteadiness.toStringAsFixed(0)}% ${walkingClassification ?? ""}',
+                  style: TextStyle(
+                    fontSize: 10.sp,
+                    fontWeight: FontWeight.bold,
+                    color: _getWalkingSteadinessColor(walkingClassification),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 8.h),
+        ],
+
+        // PRIMARY Extended vitals row (most important metrics)
+        Wrap(
+          spacing: 8.w,
+          runSpacing: 6.h,
+          children: [
+            // Blood Glucose
+            if (bloodGlucose != null)
+              _buildExtendedVitalChip(
+                icon: Icons.water_drop,
+                label: 'Glucose',
+                value: '${bloodGlucose.toStringAsFixed(0)}',
+                unit: 'mg/dL',
+                color: _getGlucoseColor(bloodGlucose),
+              ),
+            // Blood Pressure
+            if (bloodPressureSystolic != null && bloodPressureDiastolic != null)
+              _buildExtendedVitalChip(
+                icon: Icons.favorite_border,
+                label: 'BP',
+                value: '${bloodPressureSystolic.toInt()}/${bloodPressureDiastolic.toInt()}',
+                unit: '',
+                color: _getBloodPressureColor(bloodPressureSystolic, bloodPressureDiastolic),
+              ),
+            // Body Temperature
+            if (bodyTemperature != null)
+              _buildExtendedVitalChip(
+                icon: Icons.thermostat,
+                label: 'Temp',
+                value: '${bodyTemperature.toStringAsFixed(1)}',
+                unit: '°C',
+                color: _getTemperatureColor(bodyTemperature),
+              ),
+            // Wrist Temp Delta (Apple Watch specific)
+            if (wristTempDelta != null)
+              _buildExtendedVitalChip(
+                icon: Icons.device_thermostat,
+                label: 'Wrist Δ',
+                value: '${wristTempDelta >= 0 ? '+' : ''}${wristTempDelta.toStringAsFixed(1)}',
+                unit: '°C',
+                color: _getWristTempDeltaColor(wristTempDelta),
+              ),
+            // VO2 Max
+            if (vo2Max != null)
+              _buildExtendedVitalChip(
+                icon: Icons.fitness_center,
+                label: 'VO2 Max',
+                value: '${vo2Max.toStringAsFixed(1)}',
+                unit: '',
+                color: _getVO2MaxColor(vo2Max),
+              ),
+            // Peripheral Perfusion Index
+            if (perfusionIndex != null)
+              _buildExtendedVitalChip(
+                icon: Icons.bloodtype,
+                label: 'Perfusion',
+                value: '${perfusionIndex.toStringAsFixed(2)}',
+                unit: '%',
+                color: Colors.pink,
+              ),
+          ],
+        ),
+
+        // MOBILITY Section (if any mobility data available)
+        if (sixMinWalk != null || walkingSpeed != null || walkingAsymmetry != null ||
+            doubleSupportTime != null || stairAscent != null) ...[
+          SizedBox(height: 10.h),
+          Row(
+            children: [
+              Icon(Icons.accessibility_new, color: Colors.teal, size: 11.sp),
+              SizedBox(width: 4.w),
+              Text(
+                'Mobility',
+                style: TextStyle(
+                  fontSize: 9.sp,
+                  fontWeight: FontWeight.w600,
+                  color: subtextColor,
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 6.h),
+          Wrap(
+            spacing: 8.w,
+            runSpacing: 6.h,
+            children: [
+              // Six-Minute Walk Distance
+              if (sixMinWalk != null)
+                _buildExtendedVitalChip(
+                  icon: Icons.timer,
+                  label: '6-Min Walk',
+                  value: '${sixMinWalk.toStringAsFixed(0)}',
+                  unit: 'm',
+                  color: Colors.teal,
+                ),
+              // Walking Speed
+              if (walkingSpeed != null)
+                _buildExtendedVitalChip(
+                  icon: Icons.speed,
+                  label: 'Walk Speed',
+                  value: '${walkingSpeed.toStringAsFixed(2)}',
+                  unit: 'm/s',
+                  color: Colors.indigo,
+                ),
+              // Walking Asymmetry
+              if (walkingAsymmetry != null)
+                _buildExtendedVitalChip(
+                  icon: Icons.compare_arrows,
+                  label: 'Asymmetry',
+                  value: '${walkingAsymmetry.toStringAsFixed(1)}',
+                  unit: '%',
+                  color: _getAsymmetryColor(walkingAsymmetry),
+                ),
+              // Double Support Time (balance indicator)
+              if (doubleSupportTime != null)
+                _buildExtendedVitalChip(
+                  icon: Icons.balance,
+                  label: 'Balance',
+                  value: '${doubleSupportTime.toStringAsFixed(1)}',
+                  unit: '%',
+                  color: Colors.deepPurple,
+                ),
+              // Stair Ascent Speed
+              if (stairAscent != null)
+                _buildExtendedVitalChip(
+                  icon: Icons.trending_up,
+                  label: 'Stair Up',
+                  value: '${stairAscent.toStringAsFixed(2)}',
+                  unit: 'm/s',
+                  color: Colors.green,
+                ),
+              // Stair Descent Speed
+              if (stairDescent != null)
+                _buildExtendedVitalChip(
+                  icon: Icons.trending_down,
+                  label: 'Stair Down',
+                  value: '${stairDescent.toStringAsFixed(2)}',
+                  unit: 'm/s',
+                  color: Colors.orange,
+                ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+
+  Color _getWristTempDeltaColor(double? delta) {
+    if (delta == null) return Colors.grey;
+    if (delta.abs() > 1.0) return Colors.red; // Significant deviation
+    if (delta.abs() > 0.5) return Colors.orange;
+    return Colors.green; // Normal range
+  }
+
+  Color _getAsymmetryColor(double? asymmetry) {
+    if (asymmetry == null) return Colors.grey;
+    if (asymmetry > 15) return Colors.red; // High asymmetry
+    if (asymmetry > 8) return Colors.orange; // Moderate
+    return Colors.green; // Normal (< 8%)
+  }
+
+  Widget _buildExtendedVitalChip({
+    required IconData icon,
+    required String label,
+    required String value,
+    required String unit,
+    required Color color,
+  }) {
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 4.h),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8.w),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: color, size: 12.sp),
+          SizedBox(width: 4.w),
+          Text(
+            '$value$unit',
+            style: TextStyle(fontSize: 10.sp, fontWeight: FontWeight.bold, color: color),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Color helper methods for extended vitals
+  Color _getWalkingSteadinessColor(String? classification) {
+    switch (classification?.toLowerCase()) {
+      case 'ok': return Colors.green;
+      case 'low': return Colors.orange;
+      case 'very low': return Colors.red;
+      default: return Colors.grey;
+    }
+  }
+
+  Color _getGlucoseColor(double? value) {
+    if (value == null) return Colors.grey;
+    if (value < 70) return Colors.orange; // Low
+    if (value > 180) return Colors.red; // High
+    return Colors.green; // Normal (70-180)
+  }
+
+  Color _getBloodPressureColor(double? systolic, double? diastolic) {
+    if (systolic == null || diastolic == null) return Colors.grey;
+    if (systolic > 140 || diastolic > 90) return Colors.red; // High
+    if (systolic < 90 || diastolic < 60) return Colors.orange; // Low
+    return Colors.green; // Normal
+  }
+
+  Color _getTemperatureColor(double? temp) {
+    if (temp == null) return Colors.grey;
+    if (temp > 38.0) return Colors.red; // Fever
+    if (temp < 36.0) return Colors.blue; // Low
+    return Colors.green; // Normal
+  }
+
+  Color _getVO2MaxColor(double? vo2) {
+    if (vo2 == null) return Colors.grey;
+    if (vo2 >= 40) return Colors.green; // Good
+    if (vo2 >= 30) return Colors.orange; // Average
+    return Colors.red; // Below average
   }
 
   Widget _buildSleepStagesBar(double deep, double rem, double core, double awake, double total) {

@@ -56,7 +56,7 @@ class _MedicalReportsScreenState extends State<MedicalReportsScreen> with Ticker
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: CustomAppBar(title: "Medical Reports"),
+      appBar: CustomAppBar(title: "Medical Reports", showBackButton: true),
       floatingActionButton: Obx(() => FloatingActionButton.extended(
         onPressed: controller.uploadStatus.value == Status.LOADING
             ? null

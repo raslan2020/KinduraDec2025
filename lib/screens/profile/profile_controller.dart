@@ -35,6 +35,9 @@ class ProfileController extends GetxController {
   final selectedUnitSystem = 'US'.obs; // US or SI
   final acceptedTerms = false.obs;
   final allowAgentMedicationUpdates = false.obs; // Allow Kindura AI to mark medications
+  final extendedVitalsEnabled = false.obs; // Enable extended HealthKit vitals collection
+  final vitalsRetentionDays = 60.obs; // Vitals data retention period (30 or 60 days)
+  final extendedVitalsPreferences = Rx<Map<String, bool>>({}); // Individual toggle for each extended vital
   final requestStatus = Status.COMPLETED.obs;
 
   // Unit system options with display labels
@@ -132,7 +135,39 @@ class ProfileController extends GetxController {
           homeController.userProfile.value.result?.unitSystem ?? 'US';
       allowAgentMedicationUpdates.value =
           homeController.userProfile.value.result?.allowAgentMedicationUpdates ?? false;
+      extendedVitalsEnabled.value =
+          homeController.userProfile.value.result?.extendedVitalsEnabled ?? false;
+      vitalsRetentionDays.value =
+          homeController.userProfile.value.result?.vitalsRetentionDays ?? 60;
+      // Load extended vitals preferences or use defaults
+      extendedVitalsPreferences.value = homeController.userProfile.value.result?.extendedVitalsPreferences ??
+          Map<String, bool>.from(ExtendedVitalsPreferences.defaults);
     }
+  }
+
+  /// Get the enabled state for a specific vital
+  bool isVitalEnabled(String vitalKey) {
+    // If not in preferences, default to true (enabled)
+    return extendedVitalsPreferences.value[vitalKey] ?? true;
+  }
+
+  /// Toggle a specific vital on/off
+  void toggleVital(String vitalKey, bool enabled) {
+    final prefs = Map<String, bool>.from(extendedVitalsPreferences.value);
+    prefs[vitalKey] = enabled;
+    extendedVitalsPreferences.value = prefs;
+  }
+
+  /// Enable all extended vitals
+  void enableAllVitals() {
+    extendedVitalsPreferences.value = Map<String, bool>.from(ExtendedVitalsPreferences.defaults);
+  }
+
+  /// Disable all extended vitals
+  void disableAllVitals() {
+    final prefs = Map<String, bool>.from(ExtendedVitalsPreferences.defaults);
+    prefs.updateAll((key, value) => false);
+    extendedVitalsPreferences.value = prefs;
   }
 
   String getLanguageName(String? code) {
@@ -251,6 +286,9 @@ class ProfileController extends GetxController {
               : 'D',
       "unit_system": selectedUnitSystem.value,
       "allow_agent_medication_updates": allowAgentMedicationUpdates.value,
+      "extended_vitals_enabled": extendedVitalsEnabled.value,
+      "vitals_retention_days": vitalsRetentionDays.value,
+      "extended_vitals_preferences": extendedVitalsPreferences.value,
     };
     print("the data is $data");
 

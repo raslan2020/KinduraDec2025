@@ -297,6 +297,27 @@ class WatchVitalsService with WidgetsBindingObserver {
     };
   }
 
+  /// Fetch extended vitals from HealthKit
+  /// Returns additional health metrics: walking steadiness, blood pressure,
+  /// blood glucose, body temperature, AFib, VO2 max, mobility metrics
+  Future<Map<String, dynamic>?> getExtendedVitals() async {
+    try {
+      final result = await _channel.invokeMethod<Map>('getExtendedVitals');
+      if (result != null) {
+        final vitals = Map<String, dynamic>.from(result);
+        print('[WatchVitalsService] 📊 Extended vitals fetched: ${vitals.keys.length} metrics');
+        return vitals;
+      }
+      return null;
+    } on PlatformException catch (e) {
+      print('[WatchVitalsService] ❌ Platform error fetching extended vitals: ${e.message}');
+      return null;
+    } catch (e) {
+      print('[WatchVitalsService] ❌ Error fetching extended vitals: $e');
+      return null;
+    }
+  }
+
   // MARK: - HealthKit Authorization
 
   /// Request HealthKit authorization for reading health data

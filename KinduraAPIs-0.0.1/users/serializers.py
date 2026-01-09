@@ -61,11 +61,14 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ['first_name', 'last_name', 'email', 'language', 'phone_number', 'age', 'gender', 'agent_conservation_choice', 'address', 'terms_and_conditions', 'unit_system', 'unit_system_display', 'allow_agent_medication_updates']
+        fields = ['first_name', 'last_name', 'email', 'language', 'phone_number', 'age', 'gender', 'agent_conservation_choice', 'address', 'terms_and_conditions', 'unit_system', 'unit_system_display', 'allow_agent_medication_updates', 'extended_vitals_enabled', 'vitals_retention_days', 'extended_vitals_preferences']
         extra_kwargs = {
             'terms_and_conditions': {'required': True},
             'unit_system': {'required': False},
-            'allow_agent_medication_updates': {'required': False}
+            'allow_agent_medication_updates': {'required': False},
+            'extended_vitals_enabled': {'required': False},
+            'vitals_retention_days': {'required': False},
+            'extended_vitals_preferences': {'required': False}
         }
 
     def get_unit_system_display(self, obj):

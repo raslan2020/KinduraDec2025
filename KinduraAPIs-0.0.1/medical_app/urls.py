@@ -20,7 +20,12 @@ from django.conf import settings
 from django.conf.urls.static import static
 from rest_framework.routers import DefaultRouter
 from users.views import UserViewSet, ContactViewSet, DeviceContactViewSet, CommunicationRequestViewSet
-from health_profile.views import HealthProfileViewSet, WatchVitalsView, WatchVitalsHistoryView, WatchVitalsDevView
+from health_profile.views import (
+    HealthProfileViewSet, WatchVitalsView, WatchVitalsHistoryView, WatchVitalsDevView,
+    PatientClinicalProfileView, MotorSymptomView, NonMotorSymptomView,
+    MedicationDoseView, SafetyEventView, SpeechMetricsView, CognitiveScreeningView,
+    ClinicalReportView, ClinicalReportDetailView, AgentDataGapsView, AgentSymptomCollectView
+)
 from courses.views import CourseViewSet
 from medicines.views import MedicineViewSet
 from schedules.views import CourseMedicineScheduleViewSet, CourseDayTrackingViewSet
@@ -189,6 +194,30 @@ urlpatterns += [
     path('api/watch-vitals/history/', WatchVitalsHistoryView.as_view(), name='watch-vitals-history'),
     # Development endpoint for Watch simulator (no auth required)
     path('api/watch-vitals/dev/', WatchVitalsDevView.as_view(), name='watch-vitals-dev'),
+]
+
+# Clinical Data Collection APIs (Reports.md)
+urlpatterns += [
+    # Patient clinical profile
+    path('api/clinical/profile/', PatientClinicalProfileView.as_view(), name='clinical-profile'),
+    # Motor symptoms (daily)
+    path('api/clinical/motor-symptoms/', MotorSymptomView.as_view(), name='motor-symptoms'),
+    # Non-motor symptoms (weekly)
+    path('api/clinical/non-motor-symptoms/', NonMotorSymptomView.as_view(), name='non-motor-symptoms'),
+    # Medication doses
+    path('api/clinical/medication-doses/', MedicationDoseView.as_view(), name='medication-doses'),
+    # Safety events
+    path('api/clinical/safety-events/', SafetyEventView.as_view(), name='safety-events'),
+    # Speech metrics (weekly)
+    path('api/clinical/speech-metrics/', SpeechMetricsView.as_view(), name='speech-metrics'),
+    # Cognitive screening (monthly)
+    path('api/clinical/cognitive-screening/', CognitiveScreeningView.as_view(), name='cognitive-screening'),
+    # Clinical reports
+    path('api/clinical/reports/', ClinicalReportView.as_view(), name='clinical-reports'),
+    path('api/clinical/reports/<int:report_id>/', ClinicalReportDetailView.as_view(), name='clinical-report-detail'),
+    # Agent data collection endpoints
+    path('api/agent/data-gaps/', AgentDataGapsView.as_view(), name='agent-data-gaps'),
+    path('api/agent/collect-symptom/', AgentSymptomCollectView.as_view(), name='agent-collect-symptom'),
 ]
 
 # Serve media files in development

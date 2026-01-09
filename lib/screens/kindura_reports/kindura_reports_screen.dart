@@ -12,6 +12,7 @@ import 'package:kindura_ai/res/colors/app_color.dart';
 import 'package:kindura_ai/screens/bottom_navigation/bottom_navigation_controller.dart';
 import 'package:kindura_ai/screens/home/home_controller.dart';
 import 'package:kindura_ai/services/report_generation_service.dart';
+import 'package:kindura_ai/common_widgets/report_progress_banner.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class KinduraReportsScreen extends StatefulWidget {
@@ -32,8 +33,10 @@ class _KinduraReportsScreenState extends State<KinduraReportsScreen>
 
   @override
   void initState() {
+    print('📊 KinduraReportsScreen initState() starting...');
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    print('📊 TabController created');
     _tabController.addListener(() {
       if (!_tabController.indexIsChanging) {
         switch (_tabController.index) {
@@ -60,21 +63,27 @@ class _KinduraReportsScreenState extends State<KinduraReportsScreen>
   }
 
   Future<void> loadReports() async {
+    print('📊 loadReports() called - type: ${selectedType.value}');
     status.value = Status.LOADING;
     try {
+      print('📊 Calling API: ${AppUrl.patientReportsUrl}');
       final response = await _apiService.getApi(
         AppUrl.patientReportsUrl,
         queryParameters: {'type': selectedType.value, 'limit': '20'},
       );
+      print('📊 API Response received: ${response.runtimeType}');
 
-      if (response['status'] == true) {
+      if (response is Map && response['status'] == true) {
         reports.value = List<Map<String, dynamic>>.from(response['result'] ?? []);
+        print('📊 Reports loaded: ${reports.length}');
         status.value = Status.COMPLETED;
       } else {
+        print('📊 Response status false or invalid: $response');
         status.value = Status.ERROR;
       }
-    } catch (e) {
-      print('Error loading reports: $e');
+    } catch (e, stackTrace) {
+      print('📊 Error loading reports: $e');
+      print('📊 Stack trace: $stackTrace');
       status.value = Status.ERROR;
     }
   }
@@ -196,29 +205,36 @@ class _KinduraReportsScreenState extends State<KinduraReportsScreen>
           ],
         ),
       ),
-      body: Stack(
-        children: [
-          Obx(() {
-            if (status.value == Status.LOADING) {
-              return Center(child: LoadingIndicator());
-            }
+      body: Obx(() {
+        if (status.value == Status.LOADING) {
+          return Center(child: LoadingIndicator());
+        }
 
-            if (reports.isEmpty) {
-              return _buildEmptyState();
-            }
+        if (reports.isEmpty) {
+          return Column(
+            children: [
+              // Progress banner at top (non-blocking)
+              const ReportProgressBanner(),
+              Expanded(child: _buildEmptyState()),
+            ],
+          );
+        }
 
-            return RefreshIndicator(
-              onRefresh: loadReports,
-              child: ListView.builder(
-                padding: EdgeInsets.all(16.w),
-                itemCount: reports.length,
-                itemBuilder: (context, index) => _buildReportCard(reports[index]),
-              ),
-            );
-          }),
-          // Note: ReportProgressOverlay is now shown globally in bottom_navigation_screen
-        ],
-      ),
+        return RefreshIndicator(
+          onRefresh: loadReports,
+          child: ListView.builder(
+            padding: EdgeInsets.only(left: 16.w, right: 16.w, bottom: 16.h),
+            itemCount: reports.length + 1, // +1 for the banner
+            itemBuilder: (context, index) {
+              // First item is the progress banner
+              if (index == 0) {
+                return const ReportProgressBanner();
+              }
+              return _buildReportCard(reports[index - 1]);
+            },
+          ),
+        );
+      }),
       bottomNavigationBar: _buildBottomNavBar(context),
     );
   }
@@ -813,7 +829,7 @@ class _ReportDetailSheet extends StatelessWidget {
           ),
           Expanded(
             child: DefaultTabController(
-              length: 5,
+              length: 6,
               child: Column(
                 children: [
                   // Header
@@ -855,6 +871,7 @@ class _ReportDetailSheet extends StatelessWidget {
                     isScrollable: true,
                     tabs: const [
                       Tab(text: 'Summary'),
+                      Tab(text: 'Clinical'),
                       Tab(text: 'Vitals'),
                       Tab(text: 'Sleep'),
                       Tab(text: 'Labs'),
@@ -866,6 +883,7 @@ class _ReportDetailSheet extends StatelessWidget {
                     child: TabBarView(
                       children: [
                         _buildSummaryTab(),
+                        _buildClinicalTab(),
                         _buildVitalsTab(),
                         _buildSleepTab(),
                         _buildLabsTab(),
@@ -1066,6 +1084,498 @@ class _ReportDetailSheet extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+
+  /// Clinical tab for Parkinson's motor/non-motor symptoms per Reports.md
+  Widget _buildClinicalTab() {
+    final clinicalData = report['clinical_data'] as Map<String, dynamic>? ?? {};
+    final motorSymptoms = clinicalData['motor_symptoms'] as List? ?? [];
+    final nonMotorSymptoms = clinicalData['non_motor_symptoms'] as List? ?? [];
+    final safetyEvents = clinicalData['safety_events'] as List? ?? [];
+    final dataCompleteness = (clinicalData['data_completeness'] ?? 0).toDouble();
+    final motorScore = clinicalData['motor_score'] as Map<String, dynamic>? ?? {};
+    final nonMotorScore = clinicalData['non_motor_score'] as Map<String, dynamic>? ?? {};
+
+    // If no clinical data, show placeholder
+    if (motorSymptoms.isEmpty && nonMotorSymptoms.isEmpty && safetyEvents.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.medical_information_outlined, size: 48.sp, color: AppColor.textSecondary),
+            SizedBox(height: 16.h),
+            Text(
+              'No clinical data available',
+              style: TextStyle(
+                fontSize: 16.sp,
+                color: AppColor.textSecondary,
+              ),
+            ),
+            SizedBox(height: 8.h),
+            Text(
+              'Talk to your Kindura assistant to\nreport symptoms and collect clinical data.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 12.sp,
+                color: AppColor.textMuted,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ListView(
+      padding: EdgeInsets.all(16.w),
+      children: [
+        // Data Completeness Card (per Reports.md Section 6)
+        if (dataCompleteness > 0)
+          _buildCompletenessCard(dataCompleteness),
+
+        SizedBox(height: 16.h),
+
+        // Safety Events Alert (critical - per Reports.md Section 3.8)
+        if (safetyEvents.isNotEmpty)
+          _buildSafetyEventsCard(safetyEvents),
+
+        if (safetyEvents.isNotEmpty)
+          SizedBox(height: 16.h),
+
+        // Motor Symptoms Section (per Reports.md Section 3.2)
+        if (motorSymptoms.isNotEmpty || motorScore.isNotEmpty) ...[
+          _buildMotorSymptomsCard(motorSymptoms, motorScore),
+          SizedBox(height: 16.h),
+        ],
+
+        // Non-Motor Symptoms Section (per Reports.md Section 3.3)
+        if (nonMotorSymptoms.isNotEmpty || nonMotorScore.isNotEmpty) ...[
+          _buildNonMotorSymptomsCard(nonMotorSymptoms, nonMotorScore),
+          SizedBox(height: 16.h),
+        ],
+
+        // Clinical AI Insights
+        if (report['ai_clinical_insights'] != null)
+          _buildDetailSection(
+            'Clinical Insights',
+            report['ai_clinical_insights'],
+            icon: Icons.psychology,
+            color: Colors.deepPurple,
+          ),
+      ],
+    );
+  }
+
+  Widget _buildCompletenessCard(double completeness) {
+    Color color;
+    String label;
+    if (completeness >= 80) {
+      color = AppColor.success;
+      label = 'Data Complete';
+    } else if (completeness >= 60) {
+      color = AppColor.warning;
+      label = 'Partial Data';
+    } else {
+      color = AppColor.danger;
+      label = 'Data Incomplete';
+    }
+
+    return Container(
+      padding: EdgeInsets.all(12.w),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12.w),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            completeness >= 80 ? Icons.check_circle : Icons.info_outline,
+            color: color,
+            size: 24.sp,
+          ),
+          SizedBox(width: 12.w),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 14.sp,
+                    fontWeight: FontWeight.bold,
+                    color: color,
+                  ),
+                ),
+                Text(
+                  '${completeness.toStringAsFixed(0)}% of required data collected',
+                  style: TextStyle(
+                    fontSize: 12.sp,
+                    color: AppColor.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            width: 40.w,
+            height: 40.w,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                CircularProgressIndicator(
+                  value: completeness / 100,
+                  backgroundColor: Colors.grey.shade200,
+                  valueColor: AlwaysStoppedAnimation(color),
+                  strokeWidth: 4,
+                ),
+                Text(
+                  '${completeness.toStringAsFixed(0)}',
+                  style: TextStyle(
+                    fontSize: 11.sp,
+                    fontWeight: FontWeight.bold,
+                    color: color,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSafetyEventsCard(List events) {
+    return Container(
+      padding: EdgeInsets.all(12.w),
+      decoration: BoxDecoration(
+        color: AppColor.danger.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12.w),
+        border: Border.all(color: AppColor.danger.withOpacity(0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.warning_amber, color: AppColor.danger, size: 24.sp),
+              SizedBox(width: 8.w),
+              Text(
+                'Safety Events (${events.length})',
+                style: TextStyle(
+                  fontSize: 16.sp,
+                  fontWeight: FontWeight.bold,
+                  color: AppColor.danger,
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 8.h),
+          ...events.take(5).map((event) {
+            final eventType = event['event_type'] ?? 'unknown';
+            final severity = event['severity'] ?? 'medium';
+            final date = event['occurred_at'] ?? event['date'] ?? '';
+            final description = event['description'] ?? '';
+
+            IconData icon;
+            switch (eventType) {
+              case 'fall':
+                icon = Icons.personal_injury;
+                break;
+              case 'hallucination':
+                icon = Icons.visibility_off;
+                break;
+              case 'rapid_worsening':
+                icon = Icons.trending_down;
+                break;
+              default:
+                icon = Icons.error_outline;
+            }
+
+            Color severityColor;
+            switch (severity) {
+              case 'critical':
+                severityColor = Colors.red.shade900;
+                break;
+              case 'high':
+                severityColor = AppColor.danger;
+                break;
+              case 'medium':
+                severityColor = AppColor.warning;
+                break;
+              default:
+                severityColor = AppColor.textSecondary;
+            }
+
+            return Padding(
+              padding: EdgeInsets.only(bottom: 8.h),
+              child: Row(
+                children: [
+                  Icon(icon, size: 16.sp, color: severityColor),
+                  SizedBox(width: 8.w),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${eventType.replaceAll('_', ' ').capitalize}',
+                          style: TextStyle(
+                            fontSize: 13.sp,
+                            fontWeight: FontWeight.w600,
+                            color: AppColor.textPrimary,
+                          ),
+                        ),
+                        if (description.isNotEmpty)
+                          Text(
+                            description,
+                            style: TextStyle(
+                              fontSize: 11.sp,
+                              color: AppColor.textSecondary,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                      ],
+                    ),
+                  ),
+                  Text(
+                    date.toString().split('T').first,
+                    style: TextStyle(
+                      fontSize: 10.sp,
+                      color: AppColor.textMuted,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMotorSymptomsCard(List symptoms, Map<String, dynamic> score) {
+    // Calculate averages from symptoms list
+    double avgBradykinesia = 0, avgTremor = 0, avgRigidity = 0, avgGait = 0;
+    String laterality = 'N/A';
+
+    if (symptoms.isNotEmpty) {
+      for (var s in symptoms) {
+        avgBradykinesia += (s['bradykinesia'] ?? 0);
+        avgTremor += (s['tremor'] ?? 0);
+        avgRigidity += (s['rigidity'] ?? 0);
+        avgGait += (s['gait_difficulty'] ?? 0);
+        if (s['laterality'] != null) laterality = s['laterality'];
+      }
+      avgBradykinesia /= symptoms.length;
+      avgTremor /= symptoms.length;
+      avgRigidity /= symptoms.length;
+      avgGait /= symptoms.length;
+    } else if (score.isNotEmpty) {
+      avgBradykinesia = (score['bradykinesia_avg'] ?? 0).toDouble();
+      avgTremor = (score['tremor_avg'] ?? 0).toDouble();
+      avgRigidity = (score['rigidity_avg'] ?? 0).toDouble();
+      avgGait = (score['gait_avg'] ?? 0).toDouble();
+      laterality = score['laterality'] ?? 'N/A';
+    }
+
+    return Container(
+      padding: EdgeInsets.all(16.w),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12.w),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.accessibility_new, color: Colors.deepPurple, size: 20.sp),
+              SizedBox(width: 8.w),
+              Text(
+                'Motor Symptoms',
+                style: TextStyle(
+                  fontSize: 16.sp,
+                  fontWeight: FontWeight.bold,
+                  color: AppColor.textPrimary,
+                ),
+              ),
+              Spacer(),
+              if (laterality != 'N/A')
+                Container(
+                  padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 4.h),
+                  decoration: BoxDecoration(
+                    color: Colors.deepPurple.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(4.w),
+                  ),
+                  child: Text(
+                    'Side: ${laterality == 'L' ? 'Left' : laterality == 'R' ? 'Right' : 'Both'}',
+                    style: TextStyle(
+                      fontSize: 11.sp,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.deepPurple,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          SizedBox(height: 16.h),
+          // Symptom bars
+          _buildSymptomBar('Bradykinesia', avgBradykinesia, Colors.deepPurple),
+          SizedBox(height: 10.h),
+          _buildSymptomBar('Tremor', avgTremor, Colors.purple),
+          SizedBox(height: 10.h),
+          _buildSymptomBar('Rigidity', avgRigidity, Colors.indigo),
+          SizedBox(height: 10.h),
+          _buildSymptomBar('Gait Difficulty', avgGait, Colors.blue),
+
+          if (symptoms.length > 1) ...[
+            SizedBox(height: 16.h),
+            SizedBox(
+              height: 80.h,
+              child: _buildMotorTrendChart(symptoms),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSymptomBar(String label, double value, Color color) {
+    Color severityColor;
+    if (value <= 2) {
+      severityColor = AppColor.success;
+    } else if (value <= 3) {
+      severityColor = AppColor.warning;
+    } else {
+      severityColor = AppColor.danger;
+    }
+
+    return Row(
+      children: [
+        SizedBox(
+          width: 100.w,
+          child: Text(
+            label,
+            style: TextStyle(fontSize: 12.sp, color: AppColor.textSecondary),
+          ),
+        ),
+        Expanded(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(4.w),
+            child: LinearProgressIndicator(
+              value: value / 5, // Scale is 1-5
+              backgroundColor: Colors.grey.shade200,
+              valueColor: AlwaysStoppedAnimation(severityColor),
+              minHeight: 10.h,
+            ),
+          ),
+        ),
+        SizedBox(width: 8.w),
+        Text(
+          value.toStringAsFixed(1),
+          style: TextStyle(
+            fontSize: 13.sp,
+            fontWeight: FontWeight.bold,
+            color: severityColor,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMotorTrendChart(List symptoms) {
+    if (symptoms.isEmpty) return SizedBox.shrink();
+
+    return LineChart(
+      LineChartData(
+        gridData: FlGridData(show: false),
+        titlesData: FlTitlesData(show: false),
+        borderData: FlBorderData(show: false),
+        lineBarsData: [
+          // Bradykinesia line
+          LineChartBarData(
+            spots: symptoms.asMap().entries.map((e) {
+              return FlSpot(e.key.toDouble(), (e.value['bradykinesia'] ?? 0).toDouble());
+            }).toList(),
+            isCurved: true,
+            color: Colors.deepPurple,
+            barWidth: 2,
+            dotData: FlDotData(show: false),
+          ),
+          // Tremor line
+          LineChartBarData(
+            spots: symptoms.asMap().entries.map((e) {
+              return FlSpot(e.key.toDouble(), (e.value['tremor'] ?? 0).toDouble());
+            }).toList(),
+            isCurved: true,
+            color: Colors.purple.withOpacity(0.6),
+            barWidth: 2,
+            dotData: FlDotData(show: false),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNonMotorSymptomsCard(List symptoms, Map<String, dynamic> score) {
+    // Calculate averages
+    double avgSleep = 0, avgConstipation = 0, avgMood = 0, avgFatigue = 0;
+
+    if (symptoms.isNotEmpty) {
+      for (var s in symptoms) {
+        avgSleep += (s['sleep_quality'] ?? 0);
+        avgConstipation += (s['constipation'] ?? 0);
+        avgMood += (s['mood'] ?? 0);
+        avgFatigue += (s['fatigue'] ?? 0);
+      }
+      avgSleep /= symptoms.length;
+      avgConstipation /= symptoms.length;
+      avgMood /= symptoms.length;
+      avgFatigue /= symptoms.length;
+    } else if (score.isNotEmpty) {
+      avgSleep = (score['sleep_avg'] ?? 0).toDouble();
+      avgConstipation = (score['constipation_avg'] ?? 0).toDouble();
+      avgMood = (score['mood_avg'] ?? 0).toDouble();
+      avgFatigue = (score['fatigue_avg'] ?? 0).toDouble();
+    }
+
+    return Container(
+      padding: EdgeInsets.all(16.w),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12.w),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.psychology_alt, color: Colors.teal, size: 20.sp),
+              SizedBox(width: 8.w),
+              Text(
+                'Non-Motor Symptoms',
+                style: TextStyle(
+                  fontSize: 16.sp,
+                  fontWeight: FontWeight.bold,
+                  color: AppColor.textPrimary,
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 16.h),
+          // Non-motor symptom bars
+          _buildSymptomBar('Sleep Disturbance', avgSleep, Colors.teal),
+          SizedBox(height: 10.h),
+          _buildSymptomBar('Constipation', avgConstipation, Colors.orange),
+          SizedBox(height: 10.h),
+          _buildSymptomBar('Mood/Apathy', avgMood, Colors.pink),
+          SizedBox(height: 10.h),
+          _buildSymptomBar('Fatigue', avgFatigue, Colors.amber),
+        ],
+      ),
     );
   }
 
